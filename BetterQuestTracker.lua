@@ -1011,7 +1011,7 @@ for _, f in ipairs({ header, levelButton, modeButton, collapseButton }) do
 end
 
 local function RegisterSettings()
-    local category = Settings.RegisterVerticalLayoutCategory("BetterQuestTracker")
+    local category = Settings.RegisterVerticalLayoutCategory("|cff33ff99Better|rQuestTracker")
 
     local function Proxy(key, varType, name, setter)
         return Settings.RegisterProxySetting(category, "BQT_" .. key, varType, name, DEFAULTS[key],
