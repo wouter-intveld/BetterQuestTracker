@@ -12,7 +12,7 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
 ## What it does
 
 - Shows quests for your current zone, grouped under the zone headers from your
-  quest log. Right-click the header to switch between `zone` and `all`.
+  quest log. Click `zone` in the header to switch to `all` and back.
 - Sorts quests by distance, nearest first. The tracker checks every 2 seconds
   and only redraws when the order changes.
 - Follows the checkboxes in the quest log. Uncheck a quest there and it leaves
@@ -45,8 +45,9 @@ On a quest:
 
 On a zone heading, middle-click collapses or expands the whole zone.
 
-On the header, left-click collapses the tracker and right-click switches the
-zone filter.
+In the header, from left to right: the padlock locks or unlocks the tracker,
+`+3` toggles the high-level option, `zone` switches the zone filter, and the
+`-` / `+` button collapses or expands the tracker.
 
 The padlock in the header locks and unlocks the tracker. With the tracker
 unlocked, drag it to move it and use the mouse wheel to scale

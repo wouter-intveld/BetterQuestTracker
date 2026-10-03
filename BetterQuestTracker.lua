@@ -71,14 +71,60 @@ divider:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -4)
 divider:SetHeight(1)
 divider:SetColorTexture(1, 0.82, 0, 0.35)
 header:RegisterForDrag("LeftButton")
-header:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
 local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 title:SetPoint("BOTTOMLEFT")
 title:SetJustifyH("LEFT")
 
 local modeText = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-modeText:SetPoint("BOTTOMRIGHT", 0, 1)
+modeText:SetPoint("BOTTOMRIGHT", -22, 1)
+
+-- Drawn from two thin bars so it matches the flat header text instead of a bulky stock button.
+local collapseButton = CreateFrame("Button", nil, header)
+collapseButton:SetSize(16, 16)
+collapseButton:SetPoint("RIGHT", 0, -1)
+collapseButton.h = collapseButton:CreateTexture(nil, "ARTWORK")
+collapseButton.h:SetSize(9, 2)
+collapseButton.h:SetPoint("CENTER")
+collapseButton.v = collapseButton:CreateTexture(nil, "ARTWORK")
+collapseButton.v:SetSize(2, 9)
+collapseButton.v:SetPoint("CENTER")
+local function SetCollapseColor(c)
+    collapseButton.h:SetColorTexture(c, c, c, 1)
+    collapseButton.v:SetColorTexture(c, c, c, 1)
+end
+SetCollapseColor(0.5)
+collapseButton:SetScript("OnClick", function(self)
+    db.collapsed = not db.collapsed
+    Render()
+    self:GetScript("OnEnter")(self)
+end)
+collapseButton:SetScript("OnEnter", function(self)
+    SetCollapseColor(1)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine(db.collapsed and "Expand" or "Collapse")
+    GameTooltip:Show()
+end)
+collapseButton:SetScript("OnLeave", function()
+    SetCollapseColor(0.5)
+    GameTooltip_Hide()
+end)
+
+local modeButton = CreateFrame("Button", nil, header)
+modeButton:SetAllPoints(modeText)
+modeButton:SetScript("OnClick", function(self)
+    db.zoneFilter = not db.zoneFilter
+    Render()
+    self:GetScript("OnEnter")(self)
+end)
+modeButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine("Zone filter")
+    GameTooltip:AddLine(db.zoneFilter and "Showing quests in your current zone" or "Showing all quests", 1, 1, 1)
+    GameTooltip:AddLine("Click: toggle", 0.5, 0.5, 0.5)
+    GameTooltip:Show()
+end)
+modeButton:SetScript("OnLeave", GameTooltip_Hide)
 
 local levelButton = CreateFrame("Button", nil, header)
 levelButton:SetSize(16, 12)
@@ -553,6 +599,7 @@ function Render()
     levelButton.text:SetText(("%s+%d|r"):format(db.skipHighLevel and "|cffff8040" or "|cff808080", db.skipLevelDiff))
     levelButton:SetSize(levelButton.text:GetStringWidth(), levelButton.text:GetStringHeight())
     modeText:SetText(db.zoneFilter and "zone" or "all")
+    collapseButton.v:SetShown(db.collapsed)
 
     local n, y = 0, 0
     local textWidth = db.width - 16
@@ -753,19 +800,9 @@ lockButton:SetScript("OnEnter", function(self)
 end)
 lockButton:SetScript("OnLeave", GameTooltip_Hide)
 
-header:SetScript("OnClick", function(_, button)
-    if button == "RightButton" then
-        db.zoneFilter = not db.zoneFilter
-    else
-        db.collapsed = not db.collapsed
-    end
-    Render()
-end)
 header:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine("BetterQuestTracker")
-    GameTooltip:AddLine("Left-click: collapse/expand", 1, 1, 1)
-    GameTooltip:AddLine("Right-click: toggle zone filter", 1, 1, 1)
     GameTooltip:AddLine("Quest left-click: track / untrack", 1, 1, 1)
     GameTooltip:AddLine("Quest right-click: open in quest log", 1, 1, 1)
     GameTooltip:AddLine("/bqt: open settings", 1, 1, 1)
