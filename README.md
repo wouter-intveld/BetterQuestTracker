@@ -46,8 +46,10 @@ zone filter.
 
 With the tracker unlocked, drag it to move it and use the mouse wheel to scale
 it. The current scale shows as a percentage, and right-click resets it to 100%
-without moving the tracker. With it locked, the mouse wheel scrolls the list once it is taller than the
-maximum height.
+without moving the tracker.
+
+With the tracker locked, the mouse wheel scrolls the list once it is taller
+than the maximum height.
 
 ## Commands
 
