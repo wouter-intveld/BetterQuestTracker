@@ -88,6 +88,21 @@ local content = CreateFrame("Frame", nil, scroll)
 content:SetSize(DEFAULTS.width, 1)
 scroll:SetScrollChild(content)
 
+-- Covers the tracker while unlocked, so clicks move/scale instead of hitting quests.
+local moveOverlay = CreateFrame("Frame", nil, frame)
+moveOverlay:SetAllPoints()
+moveOverlay:SetFrameLevel(frame:GetFrameLevel() + 20)
+moveOverlay:EnableMouse(true)
+moveOverlay:EnableMouseWheel(true)
+moveOverlay:RegisterForDrag("LeftButton")
+moveOverlay:Hide()
+moveOverlay.bg = moveOverlay:CreateTexture(nil, "BACKGROUND")
+moveOverlay.bg:SetAllPoints()
+moveOverlay.bg:SetColorTexture(0, 0, 0, 0.6)
+moveOverlay.text = moveOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+moveOverlay.text:SetPoint("TOP", 0, -30)
+moveOverlay.text:SetJustifyH("CENTER")
+
 local moreText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 moreText:SetPoint("BOTTOMRIGHT", -8, 3)
 moreText:SetText("scroll for more")
@@ -231,6 +246,8 @@ local function ApplyLayout()
         frame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", db.point[4], db.point[5])
     end
     frame:EnableMouse(not db.locked)
+    moveOverlay:SetShown(not db.locked)
+    moveOverlay.text:SetText(("Scale %d%%\n|cffaaaaaaDrag: move   Wheel: scale\nRight-click: reset scale|r"):format(db.scale * 100 + 0.5))
     if db.locked then
         frame:SetBackdropColor(0, 0, 0, 0)
         frame:SetBackdropBorderColor(0, 0, 0, 0)
@@ -276,6 +293,15 @@ end
 frame:EnableMouseWheel(true)
 frame:SetScript("OnMouseWheel", OnMouseWheel)
 scroll:SetScript("OnMouseWheel", OnMouseWheel)
+
+moveOverlay:SetScript("OnDragStart", StartMove)
+moveOverlay:SetScript("OnDragStop", StopMove)
+moveOverlay:SetScript("OnMouseWheel", OnMouseWheel)
+moveOverlay:SetScript("OnMouseUp", function(_, button)
+    if button ~= "RightButton" then return end
+    SetScaleKeepingPosition(DEFAULTS.scale)
+    ApplyLayout()
+end)
 
 ---------------------------------------------------------------------------
 -- Quest collection
