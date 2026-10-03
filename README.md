@@ -29,6 +29,10 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
 Blizzard's tracker stays hidden while the addon is loaded. Disable the addon to
 get it back.
 
+When the durability figure (the armor icon that appears when gear is damaged)
+overlaps the locked tracker, the tracker moves down below it and returns once
+the figure hides. The saved position does not change.
+
 ## Mouse
 
 On a quest:

@@ -237,8 +237,31 @@ local function SavePosition()
     db.point = { "TOPRIGHT", "UIParent", "BOTTOMLEFT", frame:GetRight(), frame:GetTop() }
 end
 
+-- Blizzard re-stacks DurabilityFrame under the minimap and moves its own tracker
+-- out of the way. We aren't part of that stack, so we drop below it ourselves
+-- while it overlaps us. The saved position (db.point) never includes this offset.
+local function AvoidOffset()
+    local df = DurabilityFrame
+    if not db.locked or not df or not df:IsShown() then return 0 end
+    local dfLeft, dfBottom, dfWidth, dfHeight = df:GetRect()
+    if not dfLeft then return 0 end
+    local ds, fs = df:GetEffectiveScale(), frame:GetEffectiveScale()
+    dfLeft, dfBottom = dfLeft * ds, dfBottom * ds
+    local dfRight, dfTop = dfLeft + dfWidth * ds, dfBottom + dfHeight * ds
+    local right, top = db.point[4] * fs, db.point[5] * fs
+    local left, bottom = right - frame:GetWidth() * fs, top - frame:GetHeight() * fs
+    if dfRight <= left or dfLeft >= right or dfBottom >= top or dfTop <= bottom then return 0 end
+    return (top - dfBottom + 4) / fs
+end
+
+local function PlaceFrame()
+    frame.avoidOffset = AvoidOffset()
+    frame:ClearAllPoints()
+    frame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", db.point[4], db.point[5] - frame.avoidOffset)
+end
+
 local function SetScaleKeepingPosition(scale)
-    local right, top = frame:GetRight(), frame:GetTop()
+    local right, top = db.point[4], db.point[5]
     if right and top then
         local ratio = frame:GetScale() / scale
         db.point = { "TOPRIGHT", "UIParent", "BOTTOMLEFT", right * ratio, top * ratio }
@@ -250,14 +273,13 @@ local function ApplyLayout()
     frame:SetScale(db.scale)
     frame:SetWidth(db.width)
     content:SetWidth(db.width)
-    frame:ClearAllPoints()
     local p = db.point
-    frame:SetPoint(p[1], UIParent, p[3], p[4], p[5])
     if p[1] ~= "TOPRIGHT" or p[3] ~= "BOTTOMLEFT" then
-        SavePosition()
         frame:ClearAllPoints()
-        frame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", db.point[4], db.point[5])
+        frame:SetPoint(p[1], UIParent, p[3], p[4], p[5])
+        SavePosition()
     end
+    PlaceFrame()
     frame:EnableMouse(not db.locked)
     moveOverlay:SetShown(not db.locked)
     lockButton:SetNormalTexture(db.locked and "Interface\\Buttons\\LockButton-Locked-Up"
@@ -287,8 +309,7 @@ local function StopMove()
     frame.isMoving = false
     frame:SetUserPlaced(false)
     SavePosition()
-    frame:ClearAllPoints()
-    frame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", db.point[4], db.point[5])
+    PlaceFrame()
     UpdateItemButtons()
 end
 frame:RegisterForDrag("LeftButton")
@@ -617,7 +638,21 @@ function Render()
     frame:SetHeight(height)
     frame:SetClampRectInsets(0, 0, 0, height - HEADER_HEIGHT)
     if scrollable then UpdateMoreText() else moreText:Hide() end
+    if frame.avoidOffset ~= 0 or (DurabilityFrame and DurabilityFrame:IsShown()) then PlaceFrame() end
     UpdateItemButtons()
+end
+
+local durabilityHooked = false
+local function HookDurabilityFrame()
+    if durabilityHooked or not DurabilityFrame then return end
+    durabilityHooked = true
+    local function OnDurabilityChanged()
+        PlaceFrame()
+        UpdateItemButtons()
+    end
+    DurabilityFrame:HookScript("OnShow", OnDurabilityChanged)
+    DurabilityFrame:HookScript("OnHide", OnDurabilityChanged)
+    hooksecurefunc(DurabilityFrame, "SetPoint", OnDurabilityChanged)
 end
 
 -- Throttle: quest log events fire in bursts.
@@ -969,7 +1004,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
         UpdateItemCooldowns()
         return
     end
-    if event == "PLAYER_ENTERING_WORLD" then UpdateBlizzardTracker() end
+    if event == "PLAYER_ENTERING_WORLD" then
+        UpdateBlizzardTracker()
+        HookDurabilityFrame()
+    end
     if event == "PLAYER_LEVEL_UP" then
         -- UnitLevel can still report the old level here; use the event's new level.
         RetrackAllowed(arg1)

@@ -18,6 +18,7 @@
     "QuestMapFrame_OpenToQuestDetails",
     "ToggleQuestLog",
     "ObjectiveTrackerFrame",
-    "QuestWatchFrame"
+    "QuestWatchFrame",
+    "DurabilityFrame"
   ]
 }
