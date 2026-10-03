@@ -354,6 +354,12 @@ local function AddZoneName(z)
     if z and z ~= "" then zoneNames[z] = true end
 end
 
+---@class BQTQuestInfo: QuestInfo
+---@field bqtLogIndex number
+---@field bqtHeader string
+---@field bqtDistance number
+---@field bqtIndex number
+
 local function CollectQuests()
     wipe(zoneNames)
     AddZoneName(GetRealZoneText())
@@ -363,7 +369,7 @@ local function CollectQuests()
     wipe(questBuf)
     local quests, currentHeader = questBuf, nil
     for i = 1, C_QuestLog.GetNumQuestLogEntries() do
-        local info = C_QuestLog.GetInfo(i)
+        local info = C_QuestLog.GetInfo(i) --[[@as BQTQuestInfo?]]
         if info then
             if info.isHeader then
                 currentHeader = info.title
@@ -463,7 +469,7 @@ function UpdateItemButtons()
                 b.logIndex = line.logIndex
                 if b.charges ~= charges then
                     b.charges = charges
-                    b.count:SetText((charges and charges > 1) and charges or "")
+                    b.count:SetText((charges and charges > 1) and tostring(charges) or "")
                 end
                 b:SetScale(db.scale)
                 b:ClearAllPoints()
