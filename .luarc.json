@@ -16,12 +16,8 @@
     "CooldownFrame_Set",
     "GetQuestDifficultyColor",
     "QuestMapFrame_OpenToQuestDetails",
-    "ToggleQuestLog",
     "ObjectiveTrackerFrame",
-    "QuestWatchFrame",
     "DurabilityFrame",
-    "StaticPopupDialogs",
-    "StaticPopup_Show",
     "QuestMapQuestOptions_AbandonQuest",
     "ChatEdit_GetActiveWindow",
     "ChatEdit_InsertLink"

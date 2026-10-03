@@ -67,7 +67,7 @@ local frame = CreateFrame("Frame", "BetterQuestTrackerFrame", UIParent, "Backdro
 frame:SetSize(DEFAULTS.width, 60)
 frame:SetClampedToScreen(true)
 frame:SetMovable(true)
-if frame.SetDontSavePosition then frame:SetDontSavePosition(true) end
+frame:SetDontSavePosition(true)
 frame:SetFrameStrata("MEDIUM")
 frame:Hide()
 
@@ -206,52 +206,28 @@ local function UpdateMoreText()
     moreText:SetShown(scroll:GetVerticalScroll() < MaxScroll() - 1)
 end
 
-local CHECK_ICON = (C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("ui-questtracker-tracker-check"))
+-- The ready-check texture stands in if this client lacks the tracker's check atlas.
+local CHECK_ICON = C_Texture.GetAtlasInfo("ui-questtracker-tracker-check")
     and "|A:ui-questtracker-tracker-check:14:14|a"
     or "|TInterface\\RaidFrame\\ReadyCheck-Ready:14|t"
 
 local function AddPartyProgress(questID)
-    local members = GetNumSubgroupMembers()
-    if members == 0 then return end
+    if GetNumSubgroupMembers() == 0 then return end
+    local data = C_TooltipInfo.GetQuestPartyProgress(questID, true, true)
+    if not data or not data.lines or #data.lines == 0 then return end
     GameTooltip:AddLine(" ")
-
-    if C_TooltipInfo and C_TooltipInfo.GetQuestPartyProgress then
-        local ok, data = pcall(C_TooltipInfo.GetQuestPartyProgress, questID, true, true)
-        if ok and data and data.lines and #data.lines > 0 then
-            for _, l in ipairs(data.lines) do
-                if l.leftText and l.leftText ~= "" then
-                    local r, g, b = 1, 1, 1
-                    if l.leftColor then r, g, b = l.leftColor:GetRGB() end
-                    GameTooltip:AddLine(l.leftText, r, g, b)
-                end
-            end
-            return
-        end
-    end
-
-    for i = 1, members do
-        local unit = "party" .. i
-        local name = UnitName(unit) or unit
-        if C_QuestLog.IsUnitOnQuest(unit, questID) then
-            GameTooltip:AddLine(name .. ": on quest", 1, 1, 1)
-        else
-            GameTooltip:AddLine(name .. ": not on quest", 0.5, 0.5, 0.5)
+    for _, l in ipairs(data.lines) do
+        if l.leftText and l.leftText ~= "" then
+            local r, g, b = 1, 1, 1
+            if l.leftColor then r, g, b = l.leftColor:GetRGB() end
+            GameTooltip:AddLine(l.leftText, r, g, b)
         end
     end
 end
 
 local function ToggleWaypoint(questID)
-    if not C_SuperTrack then return end
     local tracked = C_SuperTrack.GetSuperTrackedQuestID() == questID
     C_SuperTrack.SetSuperTrackedQuestID(tracked and 0 or questID)
-end
-
-local function OpenQuestLog(questID)
-    if QuestMapFrame_OpenToQuestDetails then
-        QuestMapFrame_OpenToQuestDetails(questID)
-    elseif ToggleQuestLog then
-        ToggleQuestLog()
-    end
 end
 
 local function ShareQuest(questID)
@@ -259,44 +235,18 @@ local function ShareQuest(questID)
     QuestLogPushQuest()
 end
 
-StaticPopupDialogs.BETTERQUESTTRACKER_ABANDON = {
-    text = "Abandon \"%s\"?",
-    button1 = "Abandon",
-    button2 = "Cancel",
-    OnAccept = function(_, questID)
-        C_QuestLog.SetSelectedQuest(questID)
-        C_QuestLog.SetAbandonQuest()
-        C_QuestLog.AbandonQuest()
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
-
 local function ShowQuestMenu(owner, questID)
-    if not MenuUtil then
-        OpenQuestLog(questID)
-        return
-    end
-    local title = C_QuestLog.GetTitleForQuestID(questID) or "?"
     MenuUtil.CreateContextMenu(owner, function(_, root)
-        root:CreateTitle(title)
-        local tracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID
+        root:CreateTitle(C_QuestLog.GetTitleForQuestID(questID) or "?")
+        local tracked = C_SuperTrack.GetSuperTrackedQuestID() == questID
         root:CreateButton(tracked and TEXT.removeWaypoint or TEXT.setWaypoint, function() ToggleWaypoint(questID) end)
-        root:CreateButton(TEXT.openQuestLog, function() OpenQuestLog(questID) end)
+        root:CreateButton(TEXT.openQuestLog, function() QuestMapFrame_OpenToQuestDetails(questID) end)
         local share = root:CreateButton(TEXT.share, function() ShareQuest(questID) end)
         share:SetEnabled(IsInGroup() and C_QuestLog.IsPushableQuest(questID))
         root:CreateButton(TEXT.stopTracking, function() C_QuestLog.RemoveQuestWatch(questID) end)
         root:CreateDivider()
-        root:CreateButton("|cffff4040" .. TEXT.abandon .. "|r", function()
-            -- Blizzard's own quest log flow: localized popup, warns about quest items.
-            if QuestMapQuestOptions_AbandonQuest then
-                QuestMapQuestOptions_AbandonQuest(questID)
-            else
-                StaticPopup_Show("BETTERQUESTTRACKER_ABANDON", title, nil, questID)
-            end
-        end)
+        -- Blizzard's own quest log flow: localized popup, warns about quest items.
+        root:CreateButton("|cffff4040" .. TEXT.abandon .. "|r", function() QuestMapQuestOptions_AbandonQuest(questID) end)
     end)
 end
 
@@ -318,7 +268,7 @@ local function GetLine(i)
         GameTooltip:SetPoint("TOPRIGHT", self, "TOPLEFT", -34, 0)
         GameTooltip:AddLine(C_QuestLog.GetTitleForQuestID(questID) or "?")
         local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
-        if logIndex and GetQuestLogQuestText then
+        if logIndex then
             local _, objectiveText = GetQuestLogQuestText(logIndex)
             if objectiveText and objectiveText ~= "" then
                 GameTooltip:AddLine(objectiveText, 1, 1, 1, true)
@@ -371,7 +321,7 @@ local function GetLine(i)
                 C_QuestLog.RemoveQuestWatch(self.questID)
             end
         elseif IsControlKeyDown() then
-            OpenQuestLog(self.questID)
+            QuestMapFrame_OpenToQuestDetails(self.questID)
         else
             ToggleWaypoint(self.questID)
         end
@@ -389,7 +339,7 @@ end
 -- while it overlaps us. The saved position (db.point) never includes this offset.
 local function AvoidOffset()
     local df = DurabilityFrame
-    if not db.locked or not df or not df:IsVisible() then return 0 end
+    if not db.locked or not df:IsVisible() then return 0 end
     local dfLeft, dfBottom, dfWidth, dfHeight = df:GetRect()
     if not dfLeft then return 0 end
     local ds, fs = df:GetEffectiveScale(), frame:GetEffectiveScale()
@@ -493,15 +443,6 @@ end)
 -- Reused across renders to keep garbage down.
 local zoneNames, questBuf, groupRank = {}, {}, {}
 
-local function IsQuestInCurrentZone(questID, headerTitle)
-    if headerTitle and zoneNames[headerTitle] then return true end
-    if C_QuestLog.IsOnMap then
-        local onMap = C_QuestLog.IsOnMap(questID)
-        if onMap then return true end
-    end
-    return false
-end
-
 local function ByDistance(a, b)
     if a.bqtDistance ~= b.bqtDistance then return a.bqtDistance < b.bqtDistance end
     return a.bqtIndex < b.bqtIndex
@@ -514,7 +455,6 @@ local function ByGroup(a, b)
 end
 
 local function SortByDistance(quests)
-    if not C_QuestLog.GetDistanceSqToQuest then return end
     for i, q in ipairs(quests) do
         local distSq, onContinent = C_QuestLog.GetDistanceSqToQuest(q.questID)
         q.bqtDistance = (distSq and onContinent) and distSq or math.huge
@@ -548,7 +488,8 @@ local function CollectQuests()
                 currentHeader = info.title
             elseif not info.isHidden and info.questID and info.questID > 0 then
                 local watched = not db.respectWatch or C_QuestLog.GetQuestWatchType(info.questID) ~= nil
-                if watched and (not db.zoneFilter or IsQuestInCurrentZone(info.questID, currentHeader)) then
+                local inZone = not db.zoneFilter or zoneNames[currentHeader] or C_QuestLog.IsOnMap(info.questID)
+                if watched and inZone then
                     info.bqtLogIndex = i
                     info.bqtHeader = currentHeader or "Other"
                     quests[#quests + 1] = info
@@ -599,12 +540,7 @@ local function GetItemButton(i)
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        -- The quest log's own item tooltip; fall back to the plain item link.
-        if self.logIndex and GameTooltip.SetQuestLogSpecialItem then
-            GameTooltip:SetQuestLogSpecialItem(self.logIndex)
-        else
-            GameTooltip:SetHyperlink(self.link)
-        end
+        GameTooltip:SetQuestLogSpecialItem(self.logIndex) -- the quest log's own item tooltip
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", GameTooltip_Hide)
@@ -666,7 +602,7 @@ function UpdateItemButtons()
     end
     itemsDirty = false
     local used = 0
-    if GetQuestLogSpecialItemInfo and db and not db.collapsed and not frame.isMoving and frame:IsVisible() then
+    if not db.collapsed and not frame.isMoving and frame:IsVisible() then
         local viewTop, viewBottom, left = scroll:GetTop(), scroll:GetBottom(), frame:GetLeft()
         for _, line in ipairs(titleLines) do
             local link, texture, charges, showWhenComplete = GetQuestLogSpecialItemInfo(line.logIndex)
@@ -714,7 +650,7 @@ end)
 ---------------------------------------------------------------------------
 local levelColorCache, levelColorFor = {}, nil
 local function LevelColor(level)
-    if not level or not GetQuestDifficultyColor then return "|cffffd100" end
+    if not level then return "|cffffd100" end
     local playerLevel = UnitLevel("player")
     if levelColorFor ~= playerLevel then
         wipe(levelColorCache)
@@ -732,7 +668,6 @@ end
 local zoneCounts = {}
 
 function Render(reason)
-    if not db then return end
     local startTime = debugprofilestop()
     renderCount = renderCount + 1
     local quests = CollectQuests()
@@ -778,7 +713,7 @@ function Render(reason)
     end
 
     if not db.collapsed then
-        local trackedID = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID()
+        local trackedID = C_SuperTrack.GetSuperTrackedQuestID()
         wipe(zoneCounts)
         for _, q in ipairs(quests) do
             zoneCounts[q.bqtHeader] = (zoneCounts[q.bqtHeader] or 0) + 1
@@ -861,27 +796,21 @@ local function RecheckDurabilitySoon() C_Timer.After(0, OnDurabilityChanged) end
 
 local durabilityHooked = false
 local function HookDurabilityFrame()
-    if durabilityHooked or not DurabilityFrame then return end
+    if durabilityHooked then return end
     durabilityHooked = true
     DurabilityFrame:HookScript("OnShow", OnDurabilityChanged)
     DurabilityFrame:HookScript("OnHide", OnDurabilityChanged)
     hooksecurefunc(DurabilityFrame, "SetPoint", OnDurabilityChanged)
-    if EventRegistry then
-        EventRegistry:RegisterCallback("EditMode.Enter", RecheckDurabilitySoon, frame)
-        EventRegistry:RegisterCallback("EditMode.Exit", RecheckDurabilitySoon, frame)
-    end
+    EventRegistry:RegisterCallback("EditMode.Enter", RecheckDurabilitySoon, frame)
+    EventRegistry:RegisterCallback("EditMode.Exit", RecheckDurabilitySoon, frame)
 end
 
 local function PrintLayout()
     local df = DurabilityFrame
     Print(("tracker scale %.3f rect %s"):format(frame:GetEffectiveScale(),
         strjoin(" ", tostringall(frame:GetRect()))))
-    if df then
-        Print(("durability visible %s scale %.3f rect %s"):format(tostring(df:IsVisible()),
-            df:GetEffectiveScale(), strjoin(" ", tostringall(df:GetRect()))))
-    else
-        Print("durability frame not found")
-    end
+    Print(("durability visible %s scale %.3f rect %s"):format(tostring(df:IsVisible()),
+        df:GetEffectiveScale(), strjoin(" ", tostringall(df:GetRect()))))
     Print(("avoid offset %.1f (locked %s)"):format(AvoidOffset(), tostring(db.locked)))
 end
 
@@ -930,7 +859,6 @@ end
 
 local function OnSortTick()
     if not db.sortByDistance or db.collapsed or not frame:IsVisible() then return end
-    if not C_QuestLog.GetDistanceSqToQuest then return end
     if ShownOrderIsStale() then RequestRender("distance sort") end
 end
 
@@ -995,8 +923,8 @@ local blizzardHider = CreateFrame("Frame")
 blizzardHider:Hide()
 local blizzardHooked = false
 local function UpdateBlizzardTracker()
-    local tracker = ObjectiveTrackerFrame or QuestWatchFrame
-    if not tracker or InCombatLockdown() then return end
+    if InCombatLockdown() then return end
+    local tracker = ObjectiveTrackerFrame
     if not blizzardHooked then
         blizzardHooked = true
         hooksecurefunc(tracker, "SetParent", function(self, parent)
@@ -1075,7 +1003,7 @@ levelButton:SetScript("OnLeave", GameTooltip_Hide)
 -- including when it leaves via one of the header's own buttons.
 -- Must run after every SetScript on these frames, which would drop the hooks.
 local function OnHeaderHoverChanged()
-    if db then UpdateLockLabel(lockButton:IsVisible() and lockButton:IsMouseOver()) end
+    UpdateLockLabel(lockButton:IsVisible() and lockButton:IsMouseOver())
 end
 for _, f in ipairs({ header, levelButton, modeButton, collapseButton }) do
     f:HookScript("OnEnter", OnHeaderHoverChanged)
@@ -1137,14 +1065,6 @@ local function RegisterSettings()
     settingsCategory = category
 end
 
-local function OpenSettings()
-    if settingsCategory then
-        Settings.OpenToCategory(settingsCategory:GetID())
-    else
-        Print("settings panel unavailable on this client, use /bqt help")
-    end
-end
-
 ---------------------------------------------------------------------------
 -- Slash commands
 ---------------------------------------------------------------------------
@@ -1152,7 +1072,7 @@ SLASH_BETTERQUESTTRACKER1 = "/bqt"
 SlashCmdList.BETTERQUESTTRACKER = function(msg)
     local cmd, arg = (msg or ""):lower():match("^(%S*)%s*(.-)$")
     if cmd == "" or cmd == "config" then
-        OpenSettings()
+        Settings.OpenToCategory(settingsCategory:GetID())
         return
     elseif cmd == "move" or cmd == "unlock" or cmd == "lock" then
         if cmd == "move" then db.locked = not db.locked else db.locked = (cmd == "lock") end
@@ -1243,10 +1163,9 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
             "PLAYER_REGEN_ENABLED", "SUPER_TRACKING_CHANGED", "BAG_UPDATE_COOLDOWN",
             "PLAYER_LEVEL_UP", "PLAYER_TARGET_CHANGED", "UPDATE_INVENTORY_ALERTS",
         }) do
-            pcall(frame.RegisterEvent, frame, e) -- skip events this client lacks
+            frame:RegisterEvent(e)
         end
-        local ok, err = pcall(RegisterSettings)
-        if not ok then Print("could not create settings panel: " .. tostring(err)) end
+        RegisterSettings()
         -- Distance changes as you walk; only redraw when the nearest-first order breaks.
         C_Timer.NewTicker(2, OnSortTick)
         ApplyLayout()
