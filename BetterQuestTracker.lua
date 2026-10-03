@@ -27,7 +27,7 @@ local settingsCategory
 local shownOrder = {}
 local shownHeader = {}
 local renderCount = 0
-local renderReason, slowestRender, slowestReason, lastRender = "load", 0, "none", 0
+local slowestRender, slowestReason, lastRender = 0, "none", 0
 local titleLines = {}
 local UpdateItemButtons
 local Render
@@ -731,7 +731,7 @@ end
 
 local zoneCounts = {}
 
-function Render()
+function Render(reason)
     if not db then return end
     local startTime = debugprofilestop()
     renderCount = renderCount + 1
@@ -844,9 +844,8 @@ function Render()
 
     lastRender = debugprofilestop() - startTime
     if lastRender > slowestRender then
-        slowestRender, slowestReason = lastRender, renderReason
+        slowestRender, slowestReason = lastRender, reason or "direct"
     end
-    renderReason = "direct"
 end
 
 local durabilityHooked = false
@@ -886,16 +885,16 @@ local function PrintLayout()
     Print(("avoid offset %.1f (locked %s)"):format(AvoidOffset(), tostring(db.locked)))
 end
 
--- Throttle: quest log events fire in bursts.
-local pending = false
+-- Throttle: quest log events fire in bursts. Holds the reason of the queued redraw, nil when none.
+local pendingReason
 local function DoPendingRender()
-    pending = false
-    Render()
+    local reason = pendingReason
+    pendingReason = nil
+    Render(reason)
 end
 local function RequestRender(reason)
-    if pending then return end
-    pending = true
-    renderReason = reason or "settings"
+    if pendingReason then return end
+    pendingReason = reason or "settings"
     C_Timer.After(0.25, DoPendingRender)
 end
 
