@@ -600,13 +600,34 @@ local function GetItemButton(i)
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetHyperlink(self.link)
+        -- The quest log's own item tooltip; fall back to the plain item link.
+        if self.logIndex and GameTooltip.SetQuestLogSpecialItem then
+            GameTooltip:SetQuestLogSpecialItem(self.logIndex)
+        else
+            GameTooltip:SetHyperlink(self.link)
+        end
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", GameTooltip_Hide)
     b:Hide()
     itemButtons[i] = b
     return b
+end
+
+-- Range has no event, so poll it like Blizzard's item buttons do, but only
+-- while at least one item button is visible and only 4 times per second.
+local rangeTicker
+local function UpdateItemRanges()
+    for _, b in ipairs(itemButtons) do
+        if b:IsShown() and b.logIndex then
+            -- 0 = out of range, 1 = in range, nil = no range check for this item.
+            if IsQuestLogSpecialItemInRange(b.logIndex) == 0 then
+                b.icon:SetVertexColor(1, 0.3, 0.3)
+            else
+                b.icon:SetVertexColor(1, 1, 1)
+            end
+        end
+    end
 end
 
 local function UpdateItemCooldowns()
@@ -654,6 +675,13 @@ function UpdateItemButtons()
     end
     for i = used + 1, #itemButtons do itemButtons[i]:Hide() end
     UpdateItemCooldowns()
+    if used > 0 and not rangeTicker then
+        rangeTicker = C_Timer.NewTicker(0.25, UpdateItemRanges)
+    elseif used == 0 and rangeTicker then
+        rangeTicker:Cancel()
+        rangeTicker = nil
+    end
+    UpdateItemRanges()
 end
 
 scroll:SetScript("OnVerticalScroll", function()
