@@ -111,7 +111,7 @@ moveOverlay.text:SetJustifyH("CENTER")
 
 -- Parented to the frame, not the header, so it stays clickable and undimmed above the move overlay.
 local lockButton = CreateFrame("Button", nil, frame)
-lockButton:SetSize(18, 18)
+lockButton:SetSize(20, 20)
 lockButton:SetPoint("RIGHT", levelButton, "LEFT", -4, 0)
 lockButton:SetFrameLevel(moveOverlay:GetFrameLevel() + 10)
 lockButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
@@ -284,6 +284,8 @@ local function ApplyLayout()
     moveOverlay:SetShown(not db.locked)
     lockButton:SetNormalTexture(db.locked and "Interface\\Buttons\\LockButton-Locked-Up"
         or "Interface\\Buttons\\LockButton-Unlocked-Up")
+    -- The stock texture has a wide transparent border; crop it so the padlock fills the button.
+    lockButton:GetNormalTexture():SetTexCoord(0.15, 0.85, 0.15, 0.85)
     scroll:SetAlpha(db.locked and 1 or 0.25)
     header:SetAlpha(db.locked and 1 or 0.25)
     moveOverlay.text:SetText(("Scale %d%%\n|cffaaaaaaDrag: move   Wheel: scale\nRight-click: reset scale|r"):format(db.scale * 100 + 0.5))
