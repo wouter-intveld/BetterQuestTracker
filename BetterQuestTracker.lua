@@ -796,28 +796,28 @@ function Render()
                 end
             end
             if not zoneCollapsed then
-            local questCollapsed = char.collapsedQuests[q.questID]
-            local complete = C_QuestLog.IsComplete(q.questID)
-            local color = complete and "|cff20ff20" or "|cffffd100"
-            if q.questID == trackedID then color = "|cff66ccff" end
-            local titleIndex = n + 1
-            local collapsedMark = questCollapsed and " |cff808080+|r" or ""
-            AddLine(("%s[%d]|r %s%s|r%s"):format(LevelColor(q.level), q.level or 0, color, q.title or "?", collapsedMark), q.questID, 0)
-            if n == titleIndex then
-                lines[n].logIndex = q.bqtLogIndex
-                titleLines[#titleLines + 1] = lines[n]
-            end
-            if complete and not questCollapsed then
-                AddLine("|cff20ff20- " .. TEXT.ready .. "|r", q.questID, 10)
-            elseif not questCollapsed then
-                for _, obj in ipairs(C_QuestLog.GetQuestObjectives(q.questID) or {}) do
-                    if obj.text and obj.text ~= "" then
-                        local c = obj.finished and "|cff20ff20" or "|cffffffff"
-                        AddLine(c .. "- " .. obj.text .. "|r", q.questID, 10)
+                local questCollapsed = char.collapsedQuests[q.questID]
+                local complete = C_QuestLog.IsComplete(q.questID)
+                local color = complete and "|cff20ff20" or "|cffffd100"
+                if q.questID == trackedID then color = "|cff66ccff" end
+                local titleIndex = n + 1
+                local collapsedMark = questCollapsed and " |cff808080+|r" or ""
+                AddLine(("%s[%d]|r %s%s|r%s"):format(LevelColor(q.level), q.level or 0, color, q.title or "?", collapsedMark), q.questID, 0)
+                if n == titleIndex then
+                    lines[n].logIndex = q.bqtLogIndex
+                    titleLines[#titleLines + 1] = lines[n]
+                end
+                if complete and not questCollapsed then
+                    AddLine("|cff20ff20- " .. TEXT.ready .. "|r", q.questID, 10)
+                elseif not questCollapsed then
+                    for _, obj in ipairs(C_QuestLog.GetQuestObjectives(q.questID) or {}) do
+                        if obj.text and obj.text ~= "" then
+                            local c = obj.finished and "|cff20ff20" or "|cffffffff"
+                            AddLine(c .. "- " .. obj.text .. "|r", q.questID, 10)
+                        end
                     end
                 end
-            end
-            y = y - 4
+                y = y - 4
             end
         end
         if #quests == 0 then
