@@ -840,7 +840,7 @@ function Render()
     frame:SetHeight(height)
     frame:SetClampRectInsets(0, 0, 0, height - HEADER_HEIGHT)
     if scrollable then UpdateMoreText() else moreText:Hide() end
-    if frame.avoidOffset ~= 0 or (DurabilityFrame and DurabilityFrame:IsVisible()) then PlaceFrame() end
+    if AvoidOffset() ~= frame.avoidOffset then PlaceFrame() end
     UpdateItemButtons()
 
     lastRender = debugprofilestop() - startTime
@@ -854,7 +854,9 @@ local durabilityHooked = false
 local function HookDurabilityFrame()
     if durabilityHooked or not DurabilityFrame then return end
     durabilityHooked = true
+    -- Re-placing the frame moves every child, so only do it when the offset changed.
     local function OnDurabilityChanged()
+        if AvoidOffset() == frame.avoidOffset then return end
         PlaceFrame()
         UpdateItemButtons()
     end
