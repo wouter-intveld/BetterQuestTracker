@@ -490,7 +490,10 @@ end)
 ---------------------------------------------------------------------------
 -- Quest collection
 ---------------------------------------------------------------------------
-local function IsQuestInCurrentZone(questID, headerTitle, zoneNames)
+-- Reused across renders to keep garbage down.
+local zoneNames, questBuf, groupRank = {}, {}, {}
+
+local function IsQuestInCurrentZone(questID, headerTitle)
     if headerTitle and zoneNames[headerTitle] then return true end
     if C_QuestLog.IsOnMap then
         local onMap = C_QuestLog.IsOnMap(questID)
@@ -498,9 +501,6 @@ local function IsQuestInCurrentZone(questID, headerTitle, zoneNames)
     end
     return false
 end
-
--- Reused across renders to keep garbage down.
-local zoneNames, questBuf, groupRank = {}, {}, {}
 
 local function ByDistance(a, b)
     if a.bqtDistance ~= b.bqtDistance then return a.bqtDistance < b.bqtDistance end
@@ -548,7 +548,7 @@ local function CollectQuests()
                 currentHeader = info.title
             elseif not info.isHidden and info.questID and info.questID > 0 then
                 local watched = not db.respectWatch or C_QuestLog.GetQuestWatchType(info.questID) ~= nil
-                if watched and (not db.zoneFilter or IsQuestInCurrentZone(info.questID, currentHeader, zoneNames)) then
+                if watched and (not db.zoneFilter or IsQuestInCurrentZone(info.questID, currentHeader)) then
                     info.bqtLogIndex = i
                     info.bqtHeader = currentHeader or "Other"
                     quests[#quests + 1] = info
@@ -848,27 +848,27 @@ function Render(reason)
     end
 end
 
+-- Re-placing the frame moves every child, so only do it when the offset changed.
+local function OnDurabilityChanged()
+    if AvoidOffset() == frame.avoidOffset then return end
+    PlaceFrame()
+    UpdateItemButtons()
+end
+
+-- Visibility can also change without OnShow/OnHide firing on the frame itself
+-- (parent container, Edit Mode), so re-check on those signals too, next frame.
+local function RecheckDurabilitySoon() C_Timer.After(0, OnDurabilityChanged) end
+
 local durabilityHooked = false
 local function HookDurabilityFrame()
     if durabilityHooked or not DurabilityFrame then return end
     durabilityHooked = true
-    -- Re-placing the frame moves every child, so only do it when the offset changed.
-    local function OnDurabilityChanged()
-        if AvoidOffset() == frame.avoidOffset then return end
-        PlaceFrame()
-        UpdateItemButtons()
-    end
     DurabilityFrame:HookScript("OnShow", OnDurabilityChanged)
     DurabilityFrame:HookScript("OnHide", OnDurabilityChanged)
     hooksecurefunc(DurabilityFrame, "SetPoint", OnDurabilityChanged)
-    -- Visibility can also change without OnShow/OnHide firing on the frame itself
-    -- (parent container, Edit Mode), so re-check on those signals too, next frame.
-    local function RecheckSoon() C_Timer.After(0, OnDurabilityChanged) end
-    frame:RegisterEvent("UPDATE_INVENTORY_ALERTS")
-    frame.recheckDurability = RecheckSoon
     if EventRegistry then
-        EventRegistry:RegisterCallback("EditMode.Enter", RecheckSoon, frame)
-        EventRegistry:RegisterCallback("EditMode.Exit", RecheckSoon, frame)
+        EventRegistry:RegisterCallback("EditMode.Enter", RecheckDurabilitySoon, frame)
+        EventRegistry:RegisterCallback("EditMode.Exit", RecheckDurabilitySoon, frame)
     end
 end
 
@@ -1241,7 +1241,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
             "QUEST_ACCEPTED", "QUEST_REMOVED",
             "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS",
             "PLAYER_REGEN_ENABLED", "SUPER_TRACKING_CHANGED", "BAG_UPDATE_COOLDOWN",
-            "PLAYER_LEVEL_UP", "PLAYER_TARGET_CHANGED",
+            "PLAYER_LEVEL_UP", "PLAYER_TARGET_CHANGED", "UPDATE_INVENTORY_ALERTS",
         }) do
             pcall(frame.RegisterEvent, frame, e) -- skip events this client lacks
         end
@@ -1253,7 +1253,6 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
         frame:Show()
         return
     end
-    if event == "PLAYER_ENTERING_WORLD" then ApplyLayout() end
     if event == "PLAYER_REGEN_ENABLED" then
         UpdateBlizzardTracker()
         if itemsDirty then UpdateItemButtons() end
@@ -1268,10 +1267,11 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
         return
     end
     if event == "UPDATE_INVENTORY_ALERTS" then
-        if frame.recheckDurability then frame.recheckDurability() end
+        RecheckDurabilitySoon()
         return
     end
     if event == "PLAYER_ENTERING_WORLD" then
+        ApplyLayout()
         UpdateBlizzardTracker()
         HookDurabilityFrame()
     end
