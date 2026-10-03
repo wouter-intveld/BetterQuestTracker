@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: BetterQuestTracker
 ## Notes: Movable, scalable quest tracker that filters quests by your current zone.
-## Author: Wouter
+## Author: deface
 ## Version: @project-version@
 ## X-Curse-Project-ID: 1724066
 ## SavedVariables: BetterQuestTrackerDB
