@@ -342,7 +342,7 @@ local function GetLine(i)
         AddPartyProgress(questID)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Left-click: set / remove waypoint", 0.5, 0.5, 0.5)
-        GameTooltip:AddLine("Shift-click: remove from tracker", 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Shift-click: remove from tracker (or link in chat)", 0.5, 0.5, 0.5)
         GameTooltip:AddLine("Ctrl-click: open in quest log", 0.5, 0.5, 0.5)
         GameTooltip:AddLine("Right-click: quest options", 0.5, 0.5, 0.5)
         GameTooltip:AddLine("Middle-click: collapse / expand objectives", 0.5, 0.5, 0.5)
@@ -364,7 +364,13 @@ local function GetLine(i)
             GameTooltip:Hide()
             ShowQuestMenu(self, self.questID)
         elseif IsShiftKeyDown() then
-            C_QuestLog.RemoveQuestWatch(self.questID)
+            -- Like Blizzard's tracker: while typing in chat, shift-click links the quest.
+            local link = GetQuestLink(self.questID)
+            if link and ChatEdit_GetActiveWindow() then
+                ChatEdit_InsertLink(link)
+            else
+                C_QuestLog.RemoveQuestWatch(self.questID)
+            end
         elseif IsControlKeyDown() then
             OpenQuestLog(self.questID)
         else

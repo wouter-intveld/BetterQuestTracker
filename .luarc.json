@@ -22,6 +22,8 @@
     "DurabilityFrame",
     "StaticPopupDialogs",
     "StaticPopup_Show",
-    "QuestMapQuestOptions_AbandonQuest"
+    "QuestMapQuestOptions_AbandonQuest",
+    "ChatEdit_GetActiveWindow",
+    "ChatEdit_InsertLink"
   ]
 }
