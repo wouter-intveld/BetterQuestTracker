@@ -31,7 +31,7 @@ local titleLines = {}
 local UpdateItemButtons
 local Render
 local MAX_LINES = 150
-local HEADER_HEIGHT = 26
+local HEADER_HEIGHT = 32
 local FOOTER_HEIGHT = 14
 local SCROLL_STEP = 40
 
@@ -63,7 +63,13 @@ frame:SetBackdrop({
 local header = CreateFrame("Button", nil, frame)
 header:SetPoint("TOPLEFT", 6, -4)
 header:SetPoint("TOPRIGHT", -6, -4)
-header:SetHeight(18)
+header:SetHeight(20)
+
+local divider = frame:CreateTexture(nil, "ARTWORK")
+divider:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)
+divider:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -4)
+divider:SetHeight(1)
+divider:SetColorTexture(1, 0.82, 0, 0.35)
 header:RegisterForDrag("LeftButton")
 header:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
@@ -100,13 +106,13 @@ moveOverlay.bg = moveOverlay:CreateTexture(nil, "BACKGROUND")
 moveOverlay.bg:SetAllPoints()
 moveOverlay.bg:SetColorTexture(0, 0, 0, 0.4)
 moveOverlay.text = moveOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-moveOverlay.text:SetPoint("TOP", 0, -30)
+moveOverlay.text:SetPoint("TOP", 0, -HEADER_HEIGHT - 6)
 moveOverlay.text:SetJustifyH("CENTER")
 
 -- Parented to the frame, not the header, so it stays clickable and undimmed above the move overlay.
 local lockButton = CreateFrame("Button", nil, frame)
-lockButton:SetSize(14, 14)
-lockButton:SetPoint("BOTTOMRIGHT", levelButton, "BOTTOMLEFT", -6, -1)
+lockButton:SetSize(18, 18)
+lockButton:SetPoint("RIGHT", levelButton, "LEFT", -4, 0)
 lockButton:SetFrameLevel(moveOverlay:GetFrameLevel() + 10)
 lockButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 
