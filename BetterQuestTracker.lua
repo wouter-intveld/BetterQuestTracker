@@ -84,10 +84,10 @@ local collapseButton = CreateFrame("Button", nil, header)
 collapseButton:SetSize(16, 16)
 collapseButton:SetPoint("RIGHT", 0, -1)
 collapseButton.h = collapseButton:CreateTexture(nil, "ARTWORK")
-collapseButton.h:SetSize(9, 2)
+collapseButton.h:SetSize(7, 2)
 collapseButton.h:SetPoint("CENTER")
 collapseButton.v = collapseButton:CreateTexture(nil, "ARTWORK")
-collapseButton.v:SetSize(2, 9)
+collapseButton.v:SetSize(2, 7)
 collapseButton.v:SetPoint("CENTER")
 local function SetCollapseColor(c)
     collapseButton.h:SetColorTexture(c, c, c, 1)
@@ -157,10 +157,25 @@ moveOverlay.text:SetJustifyH("CENTER")
 
 -- Parented to the frame, not the header, so it stays clickable and undimmed above the move overlay.
 local lockButton = CreateFrame("Button", nil, frame)
-lockButton:SetSize(20, 20)
-lockButton:SetPoint("RIGHT", levelButton, "LEFT", -4, 0)
+lockButton:SetSize(16, 12)
+lockButton:SetPoint("BOTTOMRIGHT", levelButton, "BOTTOMLEFT", -8, 0)
 lockButton:SetFrameLevel(moveOverlay:GetFrameLevel() + 10)
-lockButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+lockButton.text = lockButton:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+lockButton.text:SetPoint("BOTTOMRIGHT")
+
+-- "move" (locked) only shows while hovering the header; "lock" (unlocked) always shows.
+local function UpdateLockLabel(hover)
+    lockButton.text:SetText(db.locked and "move" or "lock")
+    if hover then
+        lockButton.text:SetTextColor(1, 1, 1)
+    elseif db.locked then
+        lockButton.text:SetTextColor(0.5, 0.5, 0.5)
+    else
+        lockButton.text:SetTextColor(1, 0.82, 0)
+    end
+    lockButton:SetSize(lockButton.text:GetStringWidth(), lockButton.text:GetStringHeight())
+    lockButton:SetShown(not db.locked or header:IsMouseOver())
+end
 
 local moreText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 moreText:SetPoint("BOTTOMRIGHT", -8, 3)
@@ -328,10 +343,7 @@ local function ApplyLayout()
     PlaceFrame()
     frame:EnableMouse(not db.locked)
     moveOverlay:SetShown(not db.locked)
-    lockButton:SetNormalTexture(db.locked and "Interface\\Buttons\\LockButton-Locked-Up"
-        or "Interface\\Buttons\\LockButton-Unlocked-Up")
-    -- The stock texture has a wide transparent border; crop it so the padlock fills the button.
-    lockButton:GetNormalTexture():SetTexCoord(0.15, 0.85, 0.15, 0.85)
+    UpdateLockLabel(lockButton:IsVisible() and lockButton:IsMouseOver())
     scroll:SetAlpha(db.locked and 1 or 0.25)
     header:SetAlpha(db.locked and 1 or 0.25)
     moveOverlay.text:SetText(("Scale %d%%\n|cffaaaaaaDrag: move   Wheel: scale\nRight-click: reset scale|r"):format(db.scale * 100 + 0.5))
@@ -793,12 +805,16 @@ lockButton:SetScript("OnClick", function(self)
     self:GetScript("OnEnter")(self)
 end)
 lockButton:SetScript("OnEnter", function(self)
+    UpdateLockLabel(true)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine(db.locked and "Locked" or "Unlocked")
     GameTooltip:AddLine(db.locked and "Click to unlock: move and scale the tracker" or "Click to lock", 1, 1, 1)
     GameTooltip:Show()
 end)
-lockButton:SetScript("OnLeave", GameTooltip_Hide)
+lockButton:SetScript("OnLeave", function()
+    UpdateLockLabel(false)
+    GameTooltip_Hide()
+end)
 
 header:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
@@ -887,6 +903,17 @@ levelButton:SetScript("OnEnter", function(self)
     GameTooltip:Show()
 end)
 levelButton:SetScript("OnLeave", GameTooltip_Hide)
+
+-- Show/hide the "move" label as the mouse enters or leaves the header area,
+-- including when it leaves via one of the header's own buttons.
+-- Must run after every SetScript on these frames, which would drop the hooks.
+local function OnHeaderHoverChanged()
+    if db then UpdateLockLabel(lockButton:IsVisible() and lockButton:IsMouseOver()) end
+end
+for _, f in ipairs({ header, levelButton, modeButton, collapseButton }) do
+    f:HookScript("OnEnter", OnHeaderHoverChanged)
+    f:HookScript("OnLeave", OnHeaderHoverChanged)
+end
 
 local function RegisterSettings()
     local category = Settings.RegisterVerticalLayoutCategory("BetterQuestTracker")

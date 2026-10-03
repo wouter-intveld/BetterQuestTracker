@@ -45,14 +45,14 @@ On a quest:
 
 On a zone heading, middle-click collapses or expands the whole zone.
 
-In the header, from left to right: the padlock locks or unlocks the tracker,
-`+3` toggles the high-level option, `zone` switches the zone filter, and the
-`-` / `+` button collapses or expands the tracker.
+In the header, from left to right: `move` unlocks the tracker, `+3` toggles
+the high-level option, `zone` switches the zone filter, and the `-` / `+`
+button collapses or expands the tracker. `move` only shows while the mouse is
+over the header.
 
-The padlock in the header locks and unlocks the tracker. With the tracker
-unlocked, drag it to move it and use the mouse wheel to scale
-it. The current scale shows as a percentage, and right-click resets it to 100%
-without moving the tracker.
+With the tracker unlocked, `move` becomes `lock`, drag the tracker to move it,
+and use the mouse wheel to scale it. The current scale shows as a percentage,
+and right-click resets it to 100% without moving the tracker.
 
 With the tracker locked, the mouse wheel scrolls the list once it is taller
 than the maximum height.
