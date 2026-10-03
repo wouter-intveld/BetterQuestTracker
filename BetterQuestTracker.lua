@@ -44,6 +44,22 @@ local function Notify(msg)
     if not db.quiet then Print(msg) end
 end
 
+-- Blizzard's localized UI strings, with English fallbacks if a name is missing on this client.
+local function L(name, fallback)
+    local s = _G[name]
+    return type(s) == "string" and s or fallback
+end
+local TEXT = {
+    quests = L("QUESTS_LABEL", "Quests"),
+    ready = L("QUEST_WATCH_QUEST_READY", "Ready to turn in"),
+    setWaypoint = L("SUPER_TRACK_QUEST", "Set waypoint"),
+    removeWaypoint = L("STOP_SUPER_TRACK_QUEST", "Remove waypoint"),
+    openQuestLog = L("OBJECTIVES_SHOW_QUEST_MAP", "Open in quest log"),
+    stopTracking = L("OBJECTIVES_STOP_TRACKING", "Remove from tracker"),
+    share = L("SHARE_QUEST", "Share with party"),
+    abandon = L("ABANDON_QUEST_ABBREV", "Abandon quest"),
+}
+
 ---------------------------------------------------------------------------
 -- Main frame
 ---------------------------------------------------------------------------
@@ -268,13 +284,13 @@ local function ShowQuestMenu(owner, questID)
     MenuUtil.CreateContextMenu(owner, function(_, root)
         root:CreateTitle(title)
         local tracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID
-        root:CreateButton(tracked and "Remove waypoint" or "Set waypoint", function() ToggleWaypoint(questID) end)
-        root:CreateButton("Open in quest log", function() OpenQuestLog(questID) end)
-        local share = root:CreateButton("Share with party", function() ShareQuest(questID) end)
+        root:CreateButton(tracked and TEXT.removeWaypoint or TEXT.setWaypoint, function() ToggleWaypoint(questID) end)
+        root:CreateButton(TEXT.openQuestLog, function() OpenQuestLog(questID) end)
+        local share = root:CreateButton(TEXT.share, function() ShareQuest(questID) end)
         share:SetEnabled(IsInGroup() and C_QuestLog.IsPushableQuest(questID))
-        root:CreateButton("Remove from tracker", function() C_QuestLog.RemoveQuestWatch(questID) end)
+        root:CreateButton(TEXT.stopTracking, function() C_QuestLog.RemoveQuestWatch(questID) end)
         root:CreateDivider()
-        root:CreateButton("|cffff4040Abandon quest|r", function()
+        root:CreateButton("|cffff4040" .. TEXT.abandon .. "|r", function()
             -- Blizzard's own quest log flow: localized popup, warns about quest items.
             if QuestMapQuestOptions_AbandonQuest then
                 QuestMapQuestOptions_AbandonQuest(questID)
@@ -311,7 +327,7 @@ local function GetLine(i)
         end
         GameTooltip:AddLine(" ")
         if C_QuestLog.IsComplete(questID) then
-            GameTooltip:AddLine("Ready to turn in", 0.13, 1, 0.13)
+            GameTooltip:AddLine(TEXT.ready, 0.13, 1, 0.13)
         else
             for _, obj in ipairs(C_QuestLog.GetQuestObjectives(questID) or {}) do
                 if obj.text and obj.text ~= "" then
@@ -673,7 +689,7 @@ function Render()
         shownOrder[i] = q.questID
         shownHeader[i] = q.bqtHeader
     end
-    title:SetText(("Quests (%d)"):format(#quests))
+    title:SetText(("%s (%d)"):format(TEXT.quests, #quests))
     levelButton.text:SetText(("%s+%d|r"):format(db.skipHighLevel and "|cffff8040" or "|cff808080", db.skipLevelDiff))
     levelButton:SetSize(levelButton.text:GetStringWidth(), levelButton.text:GetStringHeight())
     modeText:SetText(db.zoneFilter and "zone" or "all")
@@ -734,7 +750,7 @@ function Render()
                 titleLines[#titleLines + 1] = lines[n]
             end
             if complete and not questCollapsed then
-                AddLine("|cff20ff20- Ready to turn in|r", q.questID, 10)
+                AddLine("|cff20ff20- " .. TEXT.ready .. "|r", q.questID, 10)
             elseif not questCollapsed then
                 for _, obj in ipairs(C_QuestLog.GetQuestObjectives(q.questID) or {}) do
                     if obj.text and obj.text ~= "" then
