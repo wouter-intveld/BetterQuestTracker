@@ -27,6 +27,7 @@ local settingsCategory
 local shownOrder = {}
 local shownHeader = {}
 local renderCount = 0
+local renderReason, slowestRender, slowestReason, lastRender = "load", 0, "none", 0
 local titleLines = {}
 local UpdateItemButtons
 local Render
@@ -598,6 +599,7 @@ local zoneCounts = {}
 
 function Render()
     if not db then return end
+    local startTime = debugprofilestop()
     renderCount = renderCount + 1
     local quests = CollectQuests()
     wipe(shownOrder)
@@ -701,6 +703,12 @@ function Render()
     if scrollable then UpdateMoreText() else moreText:Hide() end
     if frame.avoidOffset ~= 0 or (DurabilityFrame and DurabilityFrame:IsVisible()) then PlaceFrame() end
     UpdateItemButtons()
+
+    lastRender = debugprofilestop() - startTime
+    if lastRender > slowestRender then
+        slowestRender, slowestReason = lastRender, renderReason
+    end
+    renderReason = "direct"
 end
 
 local durabilityHooked = false
@@ -744,10 +752,21 @@ local function DoPendingRender()
     pending = false
     Render()
 end
-local function RequestRender()
+local function RequestRender(reason)
     if pending then return end
     pending = true
+    renderReason = reason or "settings"
     C_Timer.After(0.25, DoPendingRender)
+end
+
+-- Zone events also fire for indoor/outdoor transitions where the names don't
+-- change; the zone filter only depends on these names, so skip those redraws.
+local lastZoneKey
+local function ZoneNamesChanged()
+    local key = (GetRealZoneText() or "") .. "|" .. (GetZoneText() or "") .. "|" .. (GetSubZoneText() or "")
+    if key == lastZoneKey then return false end
+    lastZoneKey = key
+    return true
 end
 
 local function ShownOrderIsStale()
@@ -773,13 +792,14 @@ end
 local function OnSortTick()
     if not db.sortByDistance or db.collapsed or not frame:IsVisible() then return end
     if not C_QuestLog.GetDistanceSqToQuest then return end
-    if ShownOrderIsStale() then RequestRender() end
+    if ShownOrderIsStale() then RequestRender("distance sort") end
 end
 
 local function PrintPerf()
     UpdateAddOnMemoryUsage()
     Print(("memory %.1f KB, %d lines pooled, %d redraws this session"):format(
         GetAddOnMemoryUsage(ADDON), #lines, renderCount))
+    Print(("redraw: last %.2f ms, slowest %.2f ms (%s)"):format(lastRender, slowestRender, slowestReason))
     if C_AddOnProfiler and C_AddOnProfiler.IsEnabled and C_AddOnProfiler.IsEnabled()
         and Enum.AddOnProfilerMetric then
         local metric = Enum.AddOnProfilerMetric
@@ -1115,11 +1135,15 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
     if event == "QUEST_WATCH_LIST_CHANGED" and arg1 and arg2 then
         char.autoUntracked[arg1] = nil
     end
+    if (event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA")
+        and not ZoneNamesChanged() then
+        return
+    end
     if event == "QUEST_ACCEPTED" and db.skipHighLevel then
         -- Older clients pass (logIndex, questID), Retail passes (questID).
         -- Blizzard auto-watches after this event, so untrack slightly later.
         local questID = arg2 or arg1
         C_Timer.After(0.5, function() UntrackIfTooHigh(questID) end)
     end
-    RequestRender()
+    RequestRender(event)
 end)
