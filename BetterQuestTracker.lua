@@ -205,7 +205,6 @@ end
 local function UpdateMoreText()
     moreText:SetShown(scroll:GetVerticalScroll() < MaxScroll() - 1)
 end
-scroll:SetScript("OnVerticalScroll", UpdateMoreText)
 
 local CHECK_ICON = (C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("ui-questtracker-tracker-check"))
     and "|A:ui-questtracker-tracker-check:14:14|a"
