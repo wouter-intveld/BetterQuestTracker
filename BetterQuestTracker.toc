@@ -3,6 +3,7 @@
 ## Notes: Movable, scalable quest tracker that filters quests by your current zone.
 ## Author: Wouter
 ## Version: @project-version@
+## X-Curse-Project-ID: 1724066
 ## SavedVariables: BetterQuestTrackerDB
 ## SavedVariablesPerCharacter: BetterQuestTrackerCharDB
 
