@@ -1,0 +1,5 @@
+package-as: BetterQuestTracker
+
+ignore:
+  - .luarc.json
+  - .github
