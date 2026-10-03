@@ -849,18 +849,26 @@ header:SetScript("OnLeave", GameTooltip_Hide)
 ---------------------------------------------------------------------------
 -- Blizzard tracker
 ---------------------------------------------------------------------------
+-- Hiding the tracker with Hide() is blocked in combat (it holds secure item
+-- buttons), and Blizzard re-shows it e.g. when the quest log opens. Parenting it
+-- to a hidden frame keeps it invisible even when it shows itself in combat.
+local blizzardHider = CreateFrame("Frame")
+blizzardHider:Hide()
 local blizzardHooked = false
 local function UpdateBlizzardTracker()
     local tracker = ObjectiveTrackerFrame or QuestWatchFrame
-    if not tracker then return end
+    if not tracker or InCombatLockdown() then return end
     if not blizzardHooked then
         blizzardHooked = true
-        hooksecurefunc(tracker, "Show", function(self)
-            if not InCombatLockdown() then self:Hide() end
+        hooksecurefunc(tracker, "SetParent", function(self, parent)
+            if parent ~= blizzardHider and not InCombatLockdown() then
+                self:SetParent(blizzardHider)
+            end
         end)
     end
-    if InCombatLockdown() then return end
-    tracker:Hide()
+    if tracker:GetParent() ~= blizzardHider then
+        tracker:SetParent(blizzardHider)
+    end
 end
 
 ---------------------------------------------------------------------------
