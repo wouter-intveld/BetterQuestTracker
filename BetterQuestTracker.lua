@@ -615,19 +615,40 @@ local function GetItemButton(i)
 end
 
 -- Range has no event, so poll it like Blizzard's item buttons do, but only
--- while at least one item button is visible and only 4 times per second.
+-- while an item button is visible and you have a target (without a target
+-- there is no range to check), 4 times per second.
 local rangeTicker
+local itemButtonsShown = 0
+
+local function SetOutOfRange(b, out)
+    if b.outOfRange == out then return end
+    b.outOfRange = out
+    if out then
+        b.icon:SetVertexColor(1, 0.3, 0.3)
+    else
+        b.icon:SetVertexColor(1, 1, 1)
+    end
+end
+
 local function UpdateItemRanges()
     for _, b in ipairs(itemButtons) do
         if b:IsShown() and b.logIndex then
             -- 0 = out of range, 1 = in range, nil = no range check for this item.
-            if IsQuestLogSpecialItemInRange(b.logIndex) == 0 then
-                b.icon:SetVertexColor(1, 0.3, 0.3)
-            else
-                b.icon:SetVertexColor(1, 1, 1)
-            end
+            SetOutOfRange(b, IsQuestLogSpecialItemInRange(b.logIndex) == 0)
         end
     end
+end
+
+local function UpdateRangeTicker()
+    local wanted = itemButtonsShown > 0 and UnitExists("target")
+    if wanted and not rangeTicker then
+        rangeTicker = C_Timer.NewTicker(0.25, UpdateItemRanges)
+    elseif not wanted and rangeTicker then
+        rangeTicker:Cancel()
+        rangeTicker = nil
+        for _, b in ipairs(itemButtons) do SetOutOfRange(b, false) end
+    end
+    if wanted then UpdateItemRanges() end
 end
 
 local function UpdateItemCooldowns()
@@ -675,13 +696,8 @@ function UpdateItemButtons()
     end
     for i = used + 1, #itemButtons do itemButtons[i]:Hide() end
     UpdateItemCooldowns()
-    if used > 0 and not rangeTicker then
-        rangeTicker = C_Timer.NewTicker(0.25, UpdateItemRanges)
-    elseif used == 0 and rangeTicker then
-        rangeTicker:Cancel()
-        rangeTicker = nil
-    end
-    UpdateItemRanges()
+    itemButtonsShown = used
+    UpdateRangeTicker()
 end
 
 scroll:SetScript("OnVerticalScroll", function()
@@ -1216,7 +1232,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
             "QUEST_ACCEPTED", "QUEST_REMOVED",
             "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS",
             "PLAYER_REGEN_ENABLED", "SUPER_TRACKING_CHANGED", "BAG_UPDATE_COOLDOWN",
-            "PLAYER_LEVEL_UP",
+            "PLAYER_LEVEL_UP", "PLAYER_TARGET_CHANGED",
         }) do
             pcall(frame.RegisterEvent, frame, e) -- skip events this client lacks
         end
@@ -1236,6 +1252,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
     end
     if event == "BAG_UPDATE_COOLDOWN" then
         UpdateItemCooldowns()
+        return
+    end
+    if event == "PLAYER_TARGET_CHANGED" then
+        UpdateRangeTicker()
         return
     end
     if event == "UPDATE_INVENTORY_ALERTS" then
