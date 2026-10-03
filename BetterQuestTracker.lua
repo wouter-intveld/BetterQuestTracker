@@ -687,9 +687,14 @@ function UpdateItemButtons()
                     b.charges = charges
                     b.count:SetText((charges and charges > 1) and tostring(charges) or "")
                 end
-                b:SetScale(db.scale)
-                b:ClearAllPoints()
-                b:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", left - 4, top + 3)
+                if b.lastScale ~= db.scale then
+                    b.lastScale = db.scale
+                    b:SetScale(db.scale)
+                end
+                if b.lastLeft ~= left or b.lastTop ~= top then
+                    b.lastLeft, b.lastTop = left, top
+                    b:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", left - 4, top + 3)
+                end
                 b:Show()
             end
         end
@@ -763,8 +768,12 @@ function Render()
             line.lastHeight = math.max(14, line.text:GetStringHeight())
             line:SetHeight(line.lastHeight)
         end
-        line:ClearAllPoints()
-        line:SetPoint("TOPLEFT", content, "TOPLEFT", 8 + indent, y)
+        -- A line only ever has this one anchor, so SetPoint replaces it; skip it when nothing moved.
+        local x = 8 + indent
+        if line.lastX ~= x or line.lastY ~= y then
+            line.lastX, line.lastY = x, y
+            line:SetPoint("TOPLEFT", content, "TOPLEFT", x, y)
+        end
         line:Show()
         y = y - line.lastHeight - 2
     end
