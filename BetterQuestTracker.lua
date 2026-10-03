@@ -1143,17 +1143,13 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
         if arg1 ~= ADDON then return end
         BetterQuestTrackerDB = BetterQuestTrackerDB or {}
         db = BetterQuestTrackerDB
-        db.hideBlizzard = nil
         for k, v in pairs(DEFAULTS) do
             if db[k] == nil then db[k] = type(v) == "table" and CopyTable(v) or v end
         end
         BetterQuestTrackerCharDB = BetterQuestTrackerCharDB or {}
         char = BetterQuestTrackerCharDB
-        -- One-time move of lists that used to be saved account-wide.
-        for k in pairs(CHAR_DEFAULTS) do
-            if char[k] == nil and db[k] then char[k] = db[k] end
-            db[k] = nil
-            if char[k] == nil then char[k] = {} end
+        for k, v in pairs(CHAR_DEFAULTS) do
+            if char[k] == nil then char[k] = CopyTable(v) end
         end
         frame:UnregisterEvent("ADDON_LOADED")
         for _, e in ipairs({
