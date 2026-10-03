@@ -103,6 +103,13 @@ moveOverlay.text = moveOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlig
 moveOverlay.text:SetPoint("TOP", 0, -30)
 moveOverlay.text:SetJustifyH("CENTER")
 
+-- Parented to the frame, not the header, so it stays clickable and undimmed above the move overlay.
+local lockButton = CreateFrame("Button", nil, frame)
+lockButton:SetSize(14, 14)
+lockButton:SetPoint("BOTTOMRIGHT", levelButton, "BOTTOMLEFT", -6, -1)
+lockButton:SetFrameLevel(moveOverlay:GetFrameLevel() + 10)
+lockButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+
 local moreText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 moreText:SetPoint("BOTTOMRIGHT", -8, 3)
 moreText:SetText("scroll for more")
@@ -247,6 +254,8 @@ local function ApplyLayout()
     end
     frame:EnableMouse(not db.locked)
     moveOverlay:SetShown(not db.locked)
+    lockButton:SetNormalTexture(db.locked and "Interface\\Buttons\\LockButton-Locked-Up"
+        or "Interface\\Buttons\\LockButton-Unlocked-Up")
     scroll:SetAlpha(db.locked and 1 or 0.25)
     header:SetAlpha(db.locked and 1 or 0.25)
     moveOverlay.text:SetText(("Scale %d%%\n|cffaaaaaaDrag: move   Wheel: scale\nRight-click: reset scale|r"):format(db.scale * 100 + 0.5))
@@ -659,6 +668,19 @@ local function Refresh()
     ApplyLayout()
     RequestRender()
 end
+
+lockButton:SetScript("OnClick", function(self)
+    db.locked = not db.locked
+    Refresh()
+    self:GetScript("OnEnter")(self)
+end)
+lockButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine(db.locked and "Locked" or "Unlocked")
+    GameTooltip:AddLine(db.locked and "Click to unlock: move and scale the tracker" or "Click to lock", 1, 1, 1)
+    GameTooltip:Show()
+end)
+lockButton:SetScript("OnLeave", GameTooltip_Hide)
 
 header:SetScript("OnClick", function(_, button)
     if button == "RightButton" then

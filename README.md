@@ -44,7 +44,8 @@ On a zone heading, middle-click collapses or expands the whole zone.
 On the header, left-click collapses the tracker and right-click switches the
 zone filter.
 
-With the tracker unlocked, drag it to move it and use the mouse wheel to scale
+The padlock in the header locks and unlocks the tracker. With the tracker
+unlocked, drag it to move it and use the mouse wheel to scale
 it. The current scale shows as a percentage, and right-click resets it to 100%
 without moving the tracker.
 
