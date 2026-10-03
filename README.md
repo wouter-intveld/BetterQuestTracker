@@ -37,11 +37,12 @@ the figure hides. The saved position does not change.
 
 On a quest:
 
-| Click  | Action                                    |
-| ------ | ----------------------------------------- |
-| Left   | Track or untrack (waypoint arrow)         |
-| Right  | Open the quest in the quest log           |
-| Middle | Collapse or expand the quest's objectives |
+| Click        | Action                                                 |
+| ------------ | ------------------------------------------------------ |
+| Left         | Track or untrack (waypoint arrow)                      |
+| Shift + left | Remove from the tracker (unchecks it in the quest log) |
+| Right        | Open the quest in the quest log                        |
+| Middle       | Collapse or expand the quest's objectives              |
 
 On a zone heading, middle-click collapses or expands the whole zone.
 

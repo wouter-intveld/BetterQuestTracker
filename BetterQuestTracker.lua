@@ -266,6 +266,7 @@ local function GetLine(i)
         AddPartyProgress(questID)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Left-click: track / untrack", 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Shift-click: remove from tracker", 0.5, 0.5, 0.5)
         GameTooltip:AddLine("Right-click: open in quest log", 0.5, 0.5, 0.5)
         GameTooltip:AddLine("Middle-click: collapse / expand objectives", 0.5, 0.5, 0.5)
         GameTooltip:Show()
@@ -282,6 +283,10 @@ local function GetLine(i)
             return
         end
         if not self.questID then return end
+        if button == "LeftButton" and IsShiftKeyDown() then
+            C_QuestLog.RemoveQuestWatch(self.questID)
+            return
+        end
         if button == "LeftButton" and C_SuperTrack then
             local tracked = C_SuperTrack.GetSuperTrackedQuestID() == self.questID
             C_SuperTrack.SetSuperTrackedQuestID(tracked and 0 or self.questID)
