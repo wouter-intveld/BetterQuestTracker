@@ -19,6 +19,8 @@
     "ToggleQuestLog",
     "ObjectiveTrackerFrame",
     "QuestWatchFrame",
-    "DurabilityFrame"
+    "DurabilityFrame",
+    "StaticPopupDialogs",
+    "StaticPopup_Show"
   ]
 }

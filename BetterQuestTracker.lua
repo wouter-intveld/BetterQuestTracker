@@ -225,6 +225,61 @@ local function AddPartyProgress(questID)
     end
 end
 
+local function ToggleWaypoint(questID)
+    if not C_SuperTrack then return end
+    local tracked = C_SuperTrack.GetSuperTrackedQuestID() == questID
+    C_SuperTrack.SetSuperTrackedQuestID(tracked and 0 or questID)
+end
+
+local function OpenQuestLog(questID)
+    if QuestMapFrame_OpenToQuestDetails then
+        QuestMapFrame_OpenToQuestDetails(questID)
+    elseif ToggleQuestLog then
+        ToggleQuestLog()
+    end
+end
+
+local function ShareQuest(questID)
+    C_QuestLog.SetSelectedQuest(questID)
+    QuestLogPushQuest()
+end
+
+StaticPopupDialogs.BETTERQUESTTRACKER_ABANDON = {
+    text = "Abandon \"%s\"?",
+    button1 = "Abandon",
+    button2 = "Cancel",
+    OnAccept = function(_, questID)
+        C_QuestLog.SetSelectedQuest(questID)
+        C_QuestLog.SetAbandonQuest()
+        C_QuestLog.AbandonQuest()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local function ShowQuestMenu(owner, questID)
+    if not MenuUtil then
+        OpenQuestLog(questID)
+        return
+    end
+    local title = C_QuestLog.GetTitleForQuestID(questID) or "?"
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(title)
+        local tracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID
+        root:CreateButton(tracked and "Remove waypoint" or "Set waypoint", function() ToggleWaypoint(questID) end)
+        root:CreateButton("Open in quest log", function() OpenQuestLog(questID) end)
+        local share = root:CreateButton("Share with party", function() ShareQuest(questID) end)
+        share:SetEnabled(IsInGroup() and C_QuestLog.IsPushableQuest(questID))
+        root:CreateButton("Remove from tracker", function() C_QuestLog.RemoveQuestWatch(questID) end)
+        root:CreateDivider()
+        root:CreateButton("|cffff4040Abandon quest|r", function()
+            StaticPopup_Show("BETTERQUESTTRACKER_ABANDON", title, nil, questID)
+        end)
+    end)
+end
+
 local lines = {}
 local function GetLine(i)
     local line = lines[i]
@@ -265,9 +320,10 @@ local function GetLine(i)
         end
         AddPartyProgress(questID)
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Left-click: track / untrack", 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Left-click: set / remove waypoint", 0.5, 0.5, 0.5)
         GameTooltip:AddLine("Shift-click: remove from tracker", 0.5, 0.5, 0.5)
-        GameTooltip:AddLine("Right-click: open in quest log", 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Ctrl-click: open in quest log", 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Right-click: quest options", 0.5, 0.5, 0.5)
         GameTooltip:AddLine("Middle-click: collapse / expand objectives", 0.5, 0.5, 0.5)
         GameTooltip:Show()
     end)
@@ -283,17 +339,15 @@ local function GetLine(i)
             return
         end
         if not self.questID then return end
-        if button == "LeftButton" and IsShiftKeyDown() then
+        if button == "RightButton" then
+            GameTooltip:Hide()
+            ShowQuestMenu(self, self.questID)
+        elseif IsShiftKeyDown() then
             C_QuestLog.RemoveQuestWatch(self.questID)
-            return
-        end
-        if button == "LeftButton" and C_SuperTrack then
-            local tracked = C_SuperTrack.GetSuperTrackedQuestID() == self.questID
-            C_SuperTrack.SetSuperTrackedQuestID(tracked and 0 or self.questID)
-        elseif QuestMapFrame_OpenToQuestDetails then
-            QuestMapFrame_OpenToQuestDetails(self.questID)
-        elseif ToggleQuestLog then
-            ToggleQuestLog()
+        elseif IsControlKeyDown() then
+            OpenQuestLog(self.questID)
+        else
+            ToggleWaypoint(self.questID)
         end
     end)
     lines[i] = line
@@ -844,8 +898,8 @@ end)
 header:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine("BetterQuestTracker")
-    GameTooltip:AddLine("Quest left-click: track / untrack", 1, 1, 1)
-    GameTooltip:AddLine("Quest right-click: open in quest log", 1, 1, 1)
+    GameTooltip:AddLine("Quest left-click: set / remove waypoint", 1, 1, 1)
+    GameTooltip:AddLine("Quest right-click: quest options", 1, 1, 1)
     GameTooltip:AddLine("/bqt: open settings", 1, 1, 1)
     GameTooltip:Show()
 end)

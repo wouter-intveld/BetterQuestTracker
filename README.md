@@ -39,9 +39,10 @@ On a quest:
 
 | Click        | Action                                                 |
 | ------------ | ------------------------------------------------------ |
-| Left         | Track or untrack (waypoint arrow)                      |
+| Left         | Set or remove the waypoint arrow                       |
 | Shift + left | Remove from the tracker (unchecks it in the quest log) |
-| Right        | Open the quest in the quest log                        |
+| Ctrl + left  | Open the quest in the quest log                        |
+| Right        | Quest options: waypoint, share, remove, abandon        |
 | Middle       | Collapse or expand the quest's objectives              |
 
 On a zone heading, middle-click collapses or expands the whole zone.
