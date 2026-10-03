@@ -242,7 +242,7 @@ end
 -- while it overlaps us. The saved position (db.point) never includes this offset.
 local function AvoidOffset()
     local df = DurabilityFrame
-    if not db.locked or not df or not df:IsShown() then return 0 end
+    if not db.locked or not df or not df:IsVisible() then return 0 end
     local dfLeft, dfBottom, dfWidth, dfHeight = df:GetRect()
     if not dfLeft then return 0 end
     local ds, fs = df:GetEffectiveScale(), frame:GetEffectiveScale()
@@ -638,7 +638,7 @@ function Render()
     frame:SetHeight(height)
     frame:SetClampRectInsets(0, 0, 0, height - HEADER_HEIGHT)
     if scrollable then UpdateMoreText() else moreText:Hide() end
-    if frame.avoidOffset ~= 0 or (DurabilityFrame and DurabilityFrame:IsShown()) then PlaceFrame() end
+    if frame.avoidOffset ~= 0 or (DurabilityFrame and DurabilityFrame:IsVisible()) then PlaceFrame() end
     UpdateItemButtons()
 end
 
@@ -653,6 +653,28 @@ local function HookDurabilityFrame()
     DurabilityFrame:HookScript("OnShow", OnDurabilityChanged)
     DurabilityFrame:HookScript("OnHide", OnDurabilityChanged)
     hooksecurefunc(DurabilityFrame, "SetPoint", OnDurabilityChanged)
+    -- Visibility can also change without OnShow/OnHide firing on the frame itself
+    -- (parent container, Edit Mode), so re-check on those signals too, next frame.
+    local function RecheckSoon() C_Timer.After(0, OnDurabilityChanged) end
+    frame:RegisterEvent("UPDATE_INVENTORY_ALERTS")
+    frame.recheckDurability = RecheckSoon
+    if EventRegistry then
+        EventRegistry:RegisterCallback("EditMode.Enter", RecheckSoon, frame)
+        EventRegistry:RegisterCallback("EditMode.Exit", RecheckSoon, frame)
+    end
+end
+
+local function PrintLayout()
+    local df = DurabilityFrame
+    Print(("tracker scale %.3f rect %s"):format(frame:GetEffectiveScale(),
+        strjoin(" ", tostringall(frame:GetRect()))))
+    if df then
+        Print(("durability visible %s scale %.3f rect %s"):format(tostring(df:IsVisible()),
+            df:GetEffectiveScale(), strjoin(" ", tostringall(df:GetRect()))))
+    else
+        Print("durability frame not found")
+    end
+    Print(("avoid offset %.1f (locked %s)"):format(AvoidOffset(), tostring(db.locked)))
 end
 
 -- Throttle: quest log events fire in bursts.
@@ -931,6 +953,9 @@ SlashCmdList.BETTERQUESTTRACKER = function(msg)
     elseif cmd == "perf" then
         PrintPerf()
         return
+    elseif cmd == "layout" then
+        PrintLayout()
+        return
     elseif cmd == "reset" then
         db.point = CopyTable(DEFAULTS.point)
         db.scale = DEFAULTS.scale
@@ -950,6 +975,7 @@ SlashCmdList.BETTERQUESTTRACKER = function(msg)
         print("  /bqt quiet - mute automatic chat messages")
         print("  /bqt reset - reset position, scale, width, height")
         print("  /bqt perf - show memory and cpu usage")
+        print("  /bqt layout - show tracker and durability positions")
         return
     end
     Refresh()
@@ -1002,6 +1028,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
     end
     if event == "BAG_UPDATE_COOLDOWN" then
         UpdateItemCooldowns()
+        return
+    end
+    if event == "UPDATE_INVENTORY_ALERTS" then
+        if frame.recheckDurability then frame.recheckDurability() end
         return
     end
     if event == "PLAYER_ENTERING_WORLD" then

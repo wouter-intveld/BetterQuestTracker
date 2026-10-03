@@ -71,6 +71,7 @@ than the maximum height.
 | `/bqt quiet`      | Mute the addon's automatic chat messages     |
 | `/bqt reset`      | Reset position, scale, width and height      |
 | `/bqt perf`       | Print memory and CPU usage                   |
+| `/bqt layout`     | Print tracker and durability positions       |
 | `/bqt help`       | List the commands                            |
 
 The settings panel lives under Options > AddOns > BetterQuestTracker.
