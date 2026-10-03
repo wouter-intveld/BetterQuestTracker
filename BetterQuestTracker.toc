@@ -1,0 +1,9 @@
+## Interface: 16001, 110207, 120000
+## Title: BetterQuestTracker
+## Notes: Movable, scalable quest tracker that filters quests by your current zone.
+## Author: Wouter
+## Version: 0.1.0
+## SavedVariables: BetterQuestTrackerDB
+## SavedVariablesPerCharacter: BetterQuestTrackerCharDB
+
+BetterQuestTracker.lua
