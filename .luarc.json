@@ -21,6 +21,7 @@
     "QuestWatchFrame",
     "DurabilityFrame",
     "StaticPopupDialogs",
-    "StaticPopup_Show"
+    "StaticPopup_Show",
+    "QuestMapQuestOptions_AbandonQuest"
   ]
 }

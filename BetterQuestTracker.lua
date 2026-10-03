@@ -275,7 +275,12 @@ local function ShowQuestMenu(owner, questID)
         root:CreateButton("Remove from tracker", function() C_QuestLog.RemoveQuestWatch(questID) end)
         root:CreateDivider()
         root:CreateButton("|cffff4040Abandon quest|r", function()
-            StaticPopup_Show("BETTERQUESTTRACKER_ABANDON", title, nil, questID)
+            -- Blizzard's own quest log flow: localized popup, warns about quest items.
+            if QuestMapQuestOptions_AbandonQuest then
+                QuestMapQuestOptions_AbandonQuest(questID)
+            else
+                StaticPopup_Show("BETTERQUESTTRACKER_ABANDON", title, nil, questID)
+            end
         end)
     end)
 end
