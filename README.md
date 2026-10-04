@@ -17,8 +17,9 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
   and only redraws when the order changes.
 - Follows the checkboxes in the quest log. Uncheck a quest there and it leaves
   the tracker.
-- Unchecks newly accepted quests that are 3 or more levels above you. The
-  threshold is configurable. When you level up, or turn the option off, the
+- Optionally unchecks newly accepted quests that are 3 or more levels above
+  you. This is off by default; turn it on in the settings, where the threshold
+  is configurable too. When you level up, or turn the option off, the
   addon checks those quests again. While the option is on, the `+3` button in
   the header shows or hides those quests in the tracker; it turns grey while
   they show.
