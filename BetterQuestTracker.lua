@@ -12,6 +12,7 @@ local DEFAULTS = {
     skipHighLevel = true,  -- don't auto-track newly accepted high-level quests
     skipLevelDiff = 3,
     quiet = false,         -- mute automatic chat messages
+    showRecipes = true,    -- list recipes tracked in the profession window
     collapsed = false,
     collapsedZones = {},
 }
@@ -58,6 +59,8 @@ local TEXT = {
     stopTracking = L("OBJECTIVES_STOP_TRACKING", "Remove from tracker"),
     share = L("SHARE_QUEST", "Share with party"),
     abandon = L("ABANDON_QUEST_ABBREV", "Abandon quest"),
+    recipes = L("PROFESSIONS_TRACKER_HEADER_PROFESSION", "Professions"),
+    openRecipe = L("PROFESSIONS_TRACKING_VIEW_RECIPE", "Open recipe"),
 }
 
 ---------------------------------------------------------------------------
@@ -250,6 +253,36 @@ local function ShowQuestMenu(owner, questID)
     end)
 end
 
+local function ShowRecipeMenu(owner, recipeID, name)
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(name)
+        root:CreateButton(TEXT.openRecipe, function() C_TradeSkillUI.OpenRecipe(recipeID) end)
+        root:CreateButton(TEXT.stopTracking, function() C_TradeSkillUI.SetRecipeTracked(recipeID, false, false) end)
+    end)
+end
+
+local function ShowRecipeTooltip(line)
+    GameTooltip:SetOwner(line, "ANCHOR_NONE")
+    GameTooltip:SetPoint("TOPRIGHT", line, "TOPLEFT", -34, 0)
+    GameTooltip:AddLine(line.recipeName)
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Left-click: open recipe", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Shift-click: remove from tracker", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Right-click: recipe options", 0.5, 0.5, 0.5)
+    GameTooltip:Show()
+end
+
+local function OnRecipeClick(line, button)
+    if button == "RightButton" then
+        GameTooltip:Hide()
+        ShowRecipeMenu(line, line.recipeID, line.recipeName)
+    elseif IsShiftKeyDown() then
+        C_TradeSkillUI.SetRecipeTracked(line.recipeID, false, false)
+    else
+        C_TradeSkillUI.OpenRecipe(line.recipeID)
+    end
+end
+
 local lines = {}
 local function GetLine(i)
     local line = lines[i]
@@ -262,6 +295,10 @@ local function GetLine(i)
     line.text:SetWordWrap(true)
     line:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
     line:SetScript("OnEnter", function(self)
+        if self.recipeID then
+            ShowRecipeTooltip(self)
+            return
+        end
         local questID = self.questID
         if not questID then return end
         GameTooltip:SetOwner(self, "ANCHOR_NONE")
@@ -306,6 +343,10 @@ local function GetLine(i)
                 char.collapsedQuests[self.questID] = not char.collapsedQuests[self.questID] or nil
             end
             Render()
+            return
+        end
+        if self.recipeID then
+            OnRecipeClick(self, button)
             return
         end
         if not self.questID then return end
@@ -666,6 +707,7 @@ local function LevelColor(level)
 end
 
 local zoneCounts = {}
+local recipesTracked = 0 -- recipes shown in the last redraw; bag changes only matter then
 
 function Render(reason)
     local startTime = debugprofilestop()
@@ -687,13 +729,14 @@ function Render(reason)
     local n, y = 0, 0
     local textWidth = db.width - 16
 
-    local function AddLine(text, questID, indent, zone)
+    local function AddLine(text, questID, indent, zone, recipeID, recipeName)
         if n >= MAX_LINES then return end
         n = n + 1
         local line = GetLine(n)
         local width = textWidth - indent
         line.questID = questID
         line.zone = zone
+        line.recipeID, line.recipeName = recipeID, recipeName
         if line.lastText ~= text or line.lastWidth ~= width then
             line.lastText, line.lastWidth = text, width
             line:SetWidth(width)
@@ -757,6 +800,35 @@ function Render(reason)
         end
         if #quests == 0 then
             AddLine("|cff808080No quests for this zone|r", nil, 0)
+        end
+    end
+
+    -- Recipes tracked in the profession window, with reagents in bags / needed.
+    local recipes = db.showRecipes and C_TradeSkillUI.GetRecipesTracked(false) or {}
+    recipesTracked = #recipes
+    if not db.collapsed and #recipes > 0 then
+        local key = TEXT.recipes
+        if n > 0 then y = y - 4 end
+        if db.collapsedZones[key] then
+            AddLine(("|cffb0b0ff+ %s (%d)|r"):format(key, #recipes), nil, 0, key)
+        else
+            AddLine("|cffb0b0ff" .. key .. "|r", nil, 0, key)
+            for _, recipeID in ipairs(recipes) do
+                local schematic = C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
+                local name = schematic.name or "?"
+                AddLine("|cffffd100" .. name .. "|r", nil, 0, nil, recipeID, name)
+                for _, slot in ipairs(schematic.reagentSlotSchematics) do
+                    local reagent = slot.reagents[1]
+                    if slot.reagentType == Enum.CraftingReagentType.Basic and reagent and reagent.itemID then
+                        local have = C_Item.GetItemCount(reagent.itemID)
+                        local c = have >= slot.quantityRequired and "|cff20ff20" or "|cffffffff"
+                        local itemName = C_Item.GetItemNameByID(reagent.itemID) or "..."
+                        AddLine(("%s- %s %d/%d|r"):format(c, itemName, have, slot.quantityRequired),
+                            nil, 10, nil, recipeID, name)
+                    end
+                end
+                y = y - 4
+            end
         end
     end
     for i = n + 1, #lines do lines[i]:Hide() end
@@ -1054,6 +1126,7 @@ local function RegisterSettings()
         end, "+%d")
     Checkbox("quiet", "Mute chat messages", "Don't print automatic messages, like quests being (un)tracked.", function() end)
     Checkbox("sortByDistance", "Sort by distance", "Show the nearest quest first.", RequestRender)
+    Checkbox("showRecipes", "Show tracked recipes", "List recipes tracked in the profession window below your quests, with the reagents you carry.", RequestRender)
     Slider("scale", "Scale", "Size of the tracker.", 0.5, 2.5, 0.05,
         SetScaleKeepingPosition, "%.2f")
     Slider("width", "Width", "Width of the tracker in pixels.", 150, 600, 10,
@@ -1158,6 +1231,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
             "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS",
             "PLAYER_REGEN_ENABLED", "SUPER_TRACKING_CHANGED", "BAG_UPDATE_COOLDOWN",
             "PLAYER_LEVEL_UP", "PLAYER_TARGET_CHANGED", "UPDATE_INVENTORY_ALERTS",
+            "TRACKED_RECIPE_UPDATE", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED",
         }) do
             frame:RegisterEvent(e)
         end
@@ -1183,6 +1257,10 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2)
     end
     if event == "UPDATE_INVENTORY_ALERTS" then
         RecheckDurabilitySoon()
+        return
+    end
+    -- Reagent counts and names only matter while recipes are on screen.
+    if (event == "BAG_UPDATE_DELAYED" or event == "GET_ITEM_INFO_RECEIVED") and recipesTracked == 0 then
         return
     end
     if event == "PLAYER_ENTERING_WORLD" then

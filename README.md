@@ -25,6 +25,9 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
 - Shows a tooltip on hover with the quest text, objective progress, and the
   progress of party members.
 - Colours the quest level by difficulty, the same way the quest log does.
+- Lists recipes you track in the profession window below your quests, with
+  each reagent as "in bags/needed", green once you carry enough. Turn it off
+  in the settings.
 
 Blizzard's tracker stays hidden while the addon is loaded. Disable the addon to
 get it back.
@@ -46,6 +49,9 @@ On a quest:
 | Middle       | Collapse or expand the quest's objectives                |
 
 On a zone heading, middle-click collapses or expands the whole zone.
+
+On a recipe, left-click opens it in the profession window, shift-click
+removes it from the tracker, and right-click shows the recipe options.
 
 In the header, from left to right: `move` unlocks the tracker, `+3` toggles
 the high-level option, `zone` switches the zone filter, and the `-` / `+`
