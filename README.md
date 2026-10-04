@@ -19,7 +19,9 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
   the tracker.
 - Unchecks newly accepted quests that are 3 or more levels above you. The
   threshold is configurable. When you level up, or turn the option off, the
-  addon checks those quests again. The `+3` button in the header toggles it.
+  addon checks those quests again. While the option is on, the `+3` button in
+  the header shows or hides those quests in the tracker; it turns grey while
+  they show.
 - Adds a button left of each quest that has a usable quest item. The button
   shows the item's cooldown and charges.
 - Shows a tooltip on hover with the quest text, objective progress, and the
@@ -53,8 +55,9 @@ On a zone heading, middle-click collapses or expands the whole zone.
 On a recipe, left-click opens it in the profession window, shift-click
 removes it from the tracker, and right-click shows the recipe options.
 
-In the header, from left to right: `move` unlocks the tracker, `+3` toggles
-the high-level option, `zone` switches the zone filter, and the `-` / `+`
+In the header, from left to right: `move` unlocks the tracker, `+3` shows or
+hides high-level quests (only while that option is on), `zone` switches the
+zone filter, and the `-` / `+`
 button collapses or expands the tracker. `move` only shows while the mouse is
 over the header.
 

@@ -10,6 +10,7 @@ local DEFAULTS = {
     sortByDistance = true, -- nearest quest first
     respectWatch = true,   -- hide quests unchecked in the quest log
     skipHighLevel = true,  -- don't auto-track newly accepted high-level quests
+    showHighLevel = false, -- still list the quests skipHighLevel untracked (the +3 header toggle)
     skipLevelDiff = 3,
     quiet = false,         -- mute automatic chat messages
     showRecipes = true,    -- list recipes tracked in the profession window
@@ -537,6 +538,7 @@ local function CollectQuests()
                 currentHeader = info.title
             elseif not info.isHidden and info.questID and info.questID > 0 then
                 local watched = not db.respectWatch or C_QuestLog.GetQuestWatchType(info.questID) ~= nil
+                    or (db.skipHighLevel and db.showHighLevel and char.autoUntracked[info.questID])
                 local inZone = not db.zoneFilter or zoneNames[currentHeader] or C_QuestLog.IsOnMap(info.questID)
                 if watched and inZone then
                     info.bqtLogIndex = i
@@ -729,8 +731,11 @@ function Render(reason)
         shownHeader[i] = q.bqtHeader
     end
     title:SetText(("%s (%d)"):format(TEXT.quests, #quests))
-    levelButton.text:SetText(("%s+%d|r"):format(db.skipHighLevel and "|cffff8040" or "|cff808080", db.skipLevelDiff))
+    levelButton.text:SetText(("%s+%d|r"):format(db.showHighLevel and "|cff808080" or "|cffff8040", db.skipLevelDiff))
     levelButton:SetSize(levelButton.text:GetStringWidth(), levelButton.text:GetStringHeight())
+    -- The +3 only exists while the option is on; move then sits next to zone.
+    levelButton:SetShown(db.skipHighLevel)
+    lockButton:SetPoint("BOTTOMRIGHT", db.skipHighLevel and levelButton or modeText, "BOTTOMLEFT", -8, 0)
     modeText:SetText(db.zoneFilter and "zone" or "all")
     collapseButton.v:SetShown(db.collapsed)
 
@@ -1058,9 +1063,7 @@ local function UntrackHighLevelInLog()
 end
 
 levelButton:SetScript("OnClick", function(self)
-    db.skipHighLevel = not db.skipHighLevel
-    RetrackAllowed()
-    UntrackHighLevelInLog()
+    db.showHighLevel = not db.showHighLevel
     Render()
     self:GetScript("OnEnter")(self)
 end)
@@ -1068,13 +1071,14 @@ levelButton:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine("High-level quests")
     local minLevel = UnitLevel("player") + db.skipLevelDiff
-    if db.skipHighLevel then
-        GameTooltip:AddLine(("Not tracking quests +%d levels above you (level %d and up)"):format(db.skipLevelDiff, minLevel), 1, 0.5, 0.25, true)
+    GameTooltip:AddLine(("Not tracking quests +%d levels above you (level %d and up)"):format(db.skipLevelDiff, minLevel), 1, 0.5, 0.25, true)
+    if db.showHighLevel then
+        GameTooltip:AddLine("Showing them in the tracker anyway", 0.7, 0.7, 0.7, true)
     else
-        GameTooltip:AddLine(("Off: tracking all quests (threshold +%d, level %d and up)"):format(db.skipLevelDiff, minLevel), 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine("Hidden from the tracker", 1, 1, 1, true)
     end
-    GameTooltip:AddLine("Click: toggle", 0.5, 0.5, 0.5)
-    GameTooltip:AddLine("Change threshold in /bqt settings", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Click: show / hide them", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Turn off or change the threshold in /bqt settings", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end)
 levelButton:SetScript("OnLeave", GameTooltip_Hide)
