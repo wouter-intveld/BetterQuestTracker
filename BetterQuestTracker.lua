@@ -223,7 +223,15 @@ local function AddPartyProgress(questID)
         if l.leftText and l.leftText ~= "" then
             local r, g, b = 1, 1, 1
             if l.leftColor then r, g, b = l.leftColor:GetRGB() end
-            GameTooltip:AddLine(l.leftText, r, g, b)
+            -- Blizzard greys out a member's finished objectives and leaves open ones
+            -- white; match our own objective lines. Other colours (names) stay.
+            if r == g and g == b and r < 0.9 then
+                GameTooltip:AddLine(CHECK_ICON .. " " .. l.leftText, 0.13, 1, 0.13)
+            elseif r == 1 and g == 1 and b == 1 then
+                GameTooltip:AddLine("- " .. l.leftText, 1, 1, 1)
+            else
+                GameTooltip:AddLine(l.leftText, r, g, b)
+            end
         end
     end
 end
