@@ -27,8 +27,6 @@ local CHAR_DEFAULTS = {
 
 local db, char
 local settingsCategory
-local shownOrder = {}
-local shownHeader = {}
 local renderCount = 0
 local slowestRender, slowestReason, lastRender = 0, "none", 0
 local titleLines = {}
@@ -557,13 +555,29 @@ local function ByGroup(a, b)
     return a.bqtIndex < b.bqtIndex
 end
 
-local function SortByDistance(quests)
-    for i, q in ipairs(quests) do
-        local distSq, onContinent = C_QuestLog.GetDistanceSqToQuest(q.questID)
-        q.bqtDistance = (distSq and onContinent) and distSq or math.huge
-        q.bqtIndex = i
+-- Nearest first, then grouped under their zone header with the zones in the
+-- order of their nearest quest; with completedLast the finished quests end
+-- each zone. Ties keep the incoming order.
+local function SortQuests(quests)
+    if db.sortByDistance then
+        for i, q in ipairs(quests) do
+            local distSq, onContinent = C_QuestLog.GetDistanceSqToQuest(q.questID)
+            q.bqtDistance = (distSq and onContinent) and distSq or math.huge
+            q.bqtIndex = i
+        end
+        table.sort(quests, ByDistance)
     end
-    table.sort(quests, ByDistance)
+    wipe(groupRank)
+    local rank = 0
+    for i, q in ipairs(quests) do
+        q.bqtIndex = i
+        q.bqtDone = db.completedLast and C_QuestLog.IsComplete(q.questID) or false
+        if not groupRank[q.bqtHeader] then
+            rank = rank + 1
+            groupRank[q.bqtHeader] = rank
+        end
+    end
+    table.sort(quests, ByGroup)
 end
 
 local function AddZoneName(z)
@@ -602,21 +616,48 @@ local function CollectQuests()
             end
         end
     end
-    if db.sortByDistance then SortByDistance(quests) end
-
-    -- Group by zone header; groups keep the order of their first (nearest) quest.
-    wipe(groupRank)
-    local rank = 0
-    for i, q in ipairs(quests) do
-        q.bqtIndex = i
-        q.bqtDone = db.completedLast and C_QuestLog.IsComplete(q.questID) or false
-        if not groupRank[q.bqtHeader] then
-            rank = rank + 1
-            groupRank[q.bqtHeader] = rank
-        end
-    end
-    table.sort(quests, ByGroup)
+    SortQuests(quests)
     return quests
+end
+
+-- What the last redraw showed, for the distance tick: light copies of the
+-- sorted quests, re-sorted in place with fresh distances, and the order as
+-- drawn, where a collapsed zone counts as one entry.
+local shownQuests, shownKeys, tickKeys = {}, {}, {}
+
+local function DrawnKeys(quests, keys)
+    wipe(keys)
+    local lastZone
+    for _, q in ipairs(quests) do
+        local zone = q.bqtHeader
+        if not db.collapsedZones[zone] then
+            keys[#keys + 1] = q.questID
+        elseif zone ~= lastZone then
+            keys[#keys + 1] = zone
+        end
+        lastZone = zone
+    end
+end
+
+local function RememberShown(quests)
+    for i, q in ipairs(quests) do
+        local r = shownQuests[i] or {}
+        r.questID, r.bqtHeader = q.questID, q.bqtHeader
+        shownQuests[i] = r
+    end
+    for i = #quests + 1, #shownQuests do shownQuests[i] = nil end
+    DrawnKeys(quests, shownKeys)
+end
+
+-- True when a redraw would show the quests in a different order.
+local function ShownOrderIsStale()
+    SortQuests(shownQuests)
+    DrawnKeys(shownQuests, tickKeys)
+    if #tickKeys ~= #shownKeys then return true end
+    for i, key in ipairs(tickKeys) do
+        if key ~= shownKeys[i] then return true end
+    end
+    return false
 end
 
 ---------------------------------------------------------------------------
@@ -913,12 +954,7 @@ function Render(reason)
     local startTime = debugprofilestop()
     renderCount = renderCount + 1
     local quests = CollectQuests()
-    wipe(shownOrder)
-    wipe(shownHeader)
-    for i, q in ipairs(quests) do
-        shownOrder[i] = q.questID
-        shownHeader[i] = q.bqtHeader
-    end
+    RememberShown(quests)
     UpdateHeader(#quests)
 
     layout.n, layout.y, layout.width = 0, 0, db.width - 16
@@ -991,33 +1027,6 @@ local function ZoneNamesChanged()
     if key == lastZoneKey then return false end
     lastZoneKey = key
     return true
-end
-
-local function ShownOrderIsStale()
-    -- Zones are ordered by their nearest quest; within a zone quests run nearest
-    -- first, and with completedLast the finished ones start a second run.
-    local previous, previousGroupMin, groupMin, lastHeader, lastDone = -1, -1, nil, nil, false
-    for i, questID in ipairs(shownOrder) do
-        local h = shownHeader[i]
-        if not db.collapsedZones[h] then
-            local distSq, onContinent = C_QuestLog.GetDistanceSqToQuest(questID)
-            local d = (distSq and onContinent) and distSq or math.huge
-            local done = db.completedLast and C_QuestLog.IsComplete(questID)
-            if h ~= lastHeader then
-                if groupMin then
-                    if groupMin < previousGroupMin then return true end
-                    previousGroupMin = groupMin
-                end
-                groupMin, lastHeader, lastDone, previous = d, h, false, -1
-            else
-                if done ~= lastDone then previous = -1 end
-                if d < groupMin then groupMin = d end
-            end
-            if d < previous then return true end
-            previous, lastDone = d, done
-        end
-    end
-    return groupMin ~= nil and groupMin < previousGroupMin
 end
 
 local function OnSortTick()
