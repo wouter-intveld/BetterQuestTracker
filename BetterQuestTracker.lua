@@ -35,15 +35,38 @@ local HEADER_HEIGHT = 32
 local FOOTER_HEIGHT = 14
 local SCROLL_STEP = 40
 
+local BRAND = "|cff33ff99Better|rQuestTracker"
+
+-- Escape codes for the list. Tooltips draw finished lines in the same green as 0.13, 1, 0.13.
+local COLOR = {
+    zone = "|cffb0b0ff",
+    quest = "|cffffd100",
+    tracked = "|cff66ccff",
+    done = "|cff20ff20",
+    objective = "|cffffffff",
+    muted = "|cff808080",
+    danger = "|cffff4040",
+}
+
+-- Bounds shared by the settings sliders, the slash commands and the mouse wheel.
+local LIMITS = {
+    scale = { min = 0.5, max = 2.5, step = 0.05 },
+    width = { min = 150, max = 600, step = 10 },
+    maxHeight = { min = 150, max = 1200, step = 10 },
+    skipLevelDiff = { min = 1, max = 10, step = 1 },
+}
+
 local function Print(msg)
-    print("|cff33ff99BetterQuestTracker|r: " .. msg)
+    print(BRAND .. ": " .. msg)
 end
 
 local function Notify(msg)
     if not db.quiet then Print(msg) end
 end
 
--- Blizzard's localized UI strings, with English fallbacks if a name is missing on this client.
+-- UI text: Blizzard's localized strings where one exists, with English fallbacks
+-- if a name is missing on this client, and English otherwise. Settings labels
+-- stay in RegisterSettings and chat output next to its command.
 local function L(name, fallback)
     local s = _G[name]
     return type(s) == "string" and s or fallback
@@ -59,7 +82,44 @@ local TEXT = {
     abandon = L("ABANDON_QUEST_ABBREV", "Abandon quest"),
     recipes = L("PROFESSIONS_TRACKER_HEADER_PROFESSION", "Professions"),
     openRecipe = L("PROFESSIONS_TRACKING_VIEW_RECIPE", "Open recipe"),
+    lockFrame = L("LOCK_FRAME", "Lock Frame"),
+    unlockFrame = L("UNLOCK_FRAME", "Unlock Frame"),
+    filter = L("FILTER", "Filter"),
+    settings = L("SETTINGS", "Settings"),
+    collapse = "Collapse",
+    expand = "Expand",
+    zoneOnly = "Showing quests in your current zone",
+    zoneAll = "Showing all quests",
+    clickToggle = "Click: toggle",
+    highLevel = "High-level quests",
+    highLevelRule = "Not tracking quests +%d levels above you (level %d and up)",
+    highLevelShown = "Showing them in the tracker anyway",
+    highLevelHidden = "Hidden from the tracker",
+    highLevelClick = "Click: show / hide them",
+    highLevelSettings = "Turn off or change the threshold in /bqt settings",
+    unlockHint = "Move the tracker and scale it with the mouse wheel",
+    lockHint = "Keep the tracker where it is",
+    headerRight = "Quest right-click: quest options",
+    questRight = "Right-click: quest options",
+    questMiddle = "Middle-click: collapse / expand objectives",
+    recipeRight = "Right-click: recipe options",
+    scrollMore = "scroll for more",
+    overlay = "Scale %d%%\n|cffaaaaaaDrag: move   Wheel: scale\nRight-click: reset scale|r",
+    noQuestsZone = "No quests for this zone",
+    noQuests = "No quests",
 }
+-- Mouse hints name the same actions as the context menus, in the menus' words.
+TEXT.questLeft = ("Left-click: %s / %s"):format(TEXT.setWaypoint, TEXT.removeWaypoint)
+TEXT.questShift = ("Shift-click: %s (or link in chat)"):format(TEXT.stopTracking)
+TEXT.questCtrl = "Ctrl-click: " .. TEXT.openQuestLog
+TEXT.recipeLeft = "Left-click: " .. TEXT.openRecipe
+TEXT.recipeShift = "Shift-click: " .. TEXT.stopTracking
+TEXT.headerLeft = ("Quest left-click: %s / %s"):format(TEXT.setWaypoint, TEXT.removeWaypoint)
+TEXT.headerSettings = "/bqt: " .. TEXT.settings
+
+-- Tooltip lines: hints in grey, finished objectives in the list's green.
+local function AddHint(text) GameTooltip:AddLine(text, 0.5, 0.5, 0.5) end
+local function AddDone(text) GameTooltip:AddLine(text, 0.13, 1, 0.13) end
 
 ---------------------------------------------------------------------------
 -- Main frame
@@ -118,7 +178,7 @@ moveOverlay.text:SetJustifyH("CENTER")
 
 local moreText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 moreText:SetPoint("BOTTOMRIGHT", -8, 3)
-moreText:SetText("scroll for more")
+moreText:SetText(TEXT.scrollMore)
 
 ---------------------------------------------------------------------------
 -- Header controls
@@ -191,50 +251,49 @@ SetupControl(collapseButton, function()
     db.collapsed = not db.collapsed
     Render()
 end, function()
-    GameTooltip:AddLine(db.collapsed and "Expand" or "Collapse")
+    GameTooltip:AddLine(db.collapsed and TEXT.expand or TEXT.collapse)
 end)
 
 SetupControl(modeButton, function()
     db.zoneFilter = not db.zoneFilter
     Render()
 end, function()
-    GameTooltip:AddLine("Zone filter")
-    GameTooltip:AddLine(db.zoneFilter and "Showing quests in your current zone" or "Showing all quests", 1, 1, 1)
-    GameTooltip:AddLine("Click: toggle", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine(TEXT.filter)
+    GameTooltip:AddLine(db.zoneFilter and TEXT.zoneOnly or TEXT.zoneAll, 1, 1, 1)
+    AddHint(TEXT.clickToggle)
 end)
 
 SetupControl(levelButton, function()
     db.showHighLevel = not db.showHighLevel
     Render()
 end, function()
-    GameTooltip:AddLine("High-level quests")
+    GameTooltip:AddLine(TEXT.highLevel)
     local minLevel = UnitLevel("player") + db.skipLevelDiff
-    GameTooltip:AddLine(("Not tracking quests +%d levels above you (level %d and up)"):format(db.skipLevelDiff, minLevel),
-        1, 0.5, 0.25, true)
+    GameTooltip:AddLine(TEXT.highLevelRule:format(db.skipLevelDiff, minLevel), 1, 0.5, 0.25, true)
     if db.showHighLevel then
-        GameTooltip:AddLine("Showing them in the tracker anyway", 0.7, 0.7, 0.7, true)
+        GameTooltip:AddLine(TEXT.highLevelShown, 0.7, 0.7, 0.7, true)
     else
-        GameTooltip:AddLine("Hidden from the tracker", 1, 1, 1, true)
+        GameTooltip:AddLine(TEXT.highLevelHidden, 1, 1, 1, true)
     end
-    GameTooltip:AddLine("Click: show / hide them", 0.5, 0.5, 0.5)
-    GameTooltip:AddLine("Turn off or change the threshold in /bqt settings", 0.5, 0.5, 0.5)
+    AddHint(TEXT.highLevelClick)
+    AddHint(TEXT.highLevelSettings)
 end)
 
 SetupControl(lockButton, function()
     db.locked = not db.locked
     Refresh()
 end, function()
-    GameTooltip:AddLine(db.locked and "Locked" or "Unlocked")
-    GameTooltip:AddLine(db.locked and "Click to unlock: move and scale the tracker" or "Click to lock", 1, 1, 1)
+    GameTooltip:AddLine(db.locked and TEXT.unlockFrame or TEXT.lockFrame)
+    GameTooltip:AddLine(db.locked and TEXT.unlockHint or TEXT.lockHint, 1, 1, 1)
 end)
 
 header:SetScript("OnEnter", function(self)
     UpdateHeaderHover()
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine("BetterQuestTracker")
-    GameTooltip:AddLine("Quest left-click: set / remove waypoint", 1, 1, 1)
-    GameTooltip:AddLine("Quest right-click: quest options", 1, 1, 1)
-    GameTooltip:AddLine("/bqt: open settings", 1, 1, 1)
+    GameTooltip:AddLine(ADDON)
+    GameTooltip:AddLine(TEXT.headerLeft, 1, 1, 1)
+    GameTooltip:AddLine(TEXT.headerRight, 1, 1, 1)
+    GameTooltip:AddLine(TEXT.headerSettings, 1, 1, 1)
     GameTooltip:Show()
 end)
 header:SetScript("OnLeave", function()
@@ -280,7 +339,7 @@ local function AddPartyProgress(questID)
             -- Blizzard greys out a member's finished objectives and leaves open ones
             -- white; match our own objective lines. Other colours (names) stay.
             if r == g and g == b and r < 0.9 then
-                GameTooltip:AddLine(CHECK_ICON .. " " .. l.leftText, 0.13, 1, 0.13)
+                AddDone(CHECK_ICON .. " " .. l.leftText)
             elseif r == 1 and g == 1 and b == 1 then
                 GameTooltip:AddLine("- " .. l.leftText, 1, 1, 1)
             else
@@ -311,7 +370,7 @@ local function ShowQuestMenu(owner, questID)
         root:CreateButton(TEXT.stopTracking, function() C_QuestLog.RemoveQuestWatch(questID) end)
         root:CreateDivider()
         -- Blizzard's own quest log flow: localized popup, warns about quest items.
-        root:CreateButton("|cffff4040" .. TEXT.abandon .. "|r", function() QuestMapQuestOptions_AbandonQuest(questID) end)
+        root:CreateButton(COLOR.danger .. TEXT.abandon .. "|r", function() QuestMapQuestOptions_AbandonQuest(questID) end)
     end)
 end
 
@@ -328,9 +387,9 @@ local function ShowRecipeTooltip(line)
     GameTooltip:SetPoint("TOPRIGHT", line, "TOPLEFT", -34, 0)
     GameTooltip:AddLine(line.recipeName)
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Left-click: open recipe", 0.5, 0.5, 0.5)
-    GameTooltip:AddLine("Shift-click: remove from tracker", 0.5, 0.5, 0.5)
-    GameTooltip:AddLine("Right-click: recipe options", 0.5, 0.5, 0.5)
+    AddHint(TEXT.recipeLeft)
+    AddHint(TEXT.recipeShift)
+    AddHint(TEXT.recipeRight)
     GameTooltip:Show()
 end
 
@@ -379,12 +438,12 @@ local function GetLine(i)
         end
         GameTooltip:AddLine(" ")
         if C_QuestLog.IsComplete(questID) then
-            GameTooltip:AddLine(TEXT.ready, 0.13, 1, 0.13)
+            AddDone(TEXT.ready)
         else
             for _, obj in ipairs(C_QuestLog.GetQuestObjectives(questID) or {}) do
                 if obj.text and obj.text ~= "" then
                     if obj.finished then
-                        GameTooltip:AddLine(CHECK_ICON .. " " .. obj.text, 0.13, 1, 0.13)
+                        AddDone(CHECK_ICON .. " " .. obj.text)
                     else
                         GameTooltip:AddLine("- " .. obj.text, 1, 1, 1)
                     end
@@ -393,11 +452,11 @@ local function GetLine(i)
         end
         AddPartyProgress(questID)
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Left-click: set / remove waypoint", 0.5, 0.5, 0.5)
-        GameTooltip:AddLine("Shift-click: remove from tracker (or link in chat)", 0.5, 0.5, 0.5)
-        GameTooltip:AddLine("Ctrl-click: open in quest log", 0.5, 0.5, 0.5)
-        GameTooltip:AddLine("Right-click: quest options", 0.5, 0.5, 0.5)
-        GameTooltip:AddLine("Middle-click: collapse / expand objectives", 0.5, 0.5, 0.5)
+        AddHint(TEXT.questLeft)
+        AddHint(TEXT.questShift)
+        AddHint(TEXT.questCtrl)
+        AddHint(TEXT.questRight)
+        AddHint(TEXT.questMiddle)
         GameTooltip:Show()
     end)
     line:SetScript("OnLeave", GameTooltip_Hide)
@@ -488,7 +547,7 @@ local function ApplyLayout()
     UpdateHeaderHover()
     scroll:SetAlpha(db.locked and 1 or 0.25)
     header:SetAlpha(db.locked and 1 or 0.25)
-    moveOverlay.text:SetText(("Scale %d%%\n|cffaaaaaaDrag: move   Wheel: scale\nRight-click: reset scale|r"):format(db.scale * 100 + 0.5))
+    moveOverlay.text:SetText(TEXT.overlay:format(db.scale * 100 + 0.5))
     if db.locked then
         frame:SetBackdropColor(0, 0, 0, 0)
         frame:SetBackdropBorderColor(0, 0, 0, 0)
@@ -519,7 +578,8 @@ end
 -- than maxHeight, so over a short tracker the wheel still reaches the camera.
 local function OnMouseWheel(_, delta)
     if not db.locked then
-        SetScaleKeepingPosition(math.min(2.5, math.max(0.5, db.scale + delta * 0.05)))
+        local lim = LIMITS.scale
+        SetScaleKeepingPosition(math.min(lim.max, math.max(lim.min, db.scale + delta * lim.step)))
         ApplyLayout()
         return
     end
@@ -797,7 +857,7 @@ end)
 ---------------------------------------------------------------------------
 local levelColorCache, levelColorFor = {}, nil
 local function LevelColor(level)
-    if not level then return "|cffffd100" end
+    if not level then return COLOR.quest end
     local playerLevel = UnitLevel("player")
     if levelColorFor ~= playerLevel then
         wipe(levelColorCache)
@@ -854,28 +914,28 @@ end
 -- Zone and recipe headers. A collapsed one shows its count; middle-click toggles it.
 local function AddSectionHeader(name, collapsedCount)
     if layout.n > 0 then layout.y = layout.y - 4 end
-    local text = collapsedCount and ("|cffb0b0ff+ %s (%d)|r"):format(name, collapsedCount)
-        or "|cffb0b0ff" .. name .. "|r"
+    local text = collapsedCount and ("%s+ %s (%d)|r"):format(COLOR.zone, name, collapsedCount)
+        or COLOR.zone .. name .. "|r"
     AddLine(text, 0).zone = name
 end
 
 local function RenderQuest(q, trackedID)
     local questCollapsed = char.collapsedQuests[q.questID]
     local complete = C_QuestLog.IsComplete(q.questID)
-    local color = complete and "|cff20ff20" or "|cffffd100"
-    if q.questID == trackedID then color = "|cff66ccff" end
-    local collapsedMark = questCollapsed and " |cff808080+|r" or ""
+    local color = complete and COLOR.done or COLOR.quest
+    if q.questID == trackedID then color = COLOR.tracked end
+    local collapsedMark = questCollapsed and " " .. COLOR.muted .. "+|r" or ""
     local text = ("%s[%d]|r %s%s|r%s"):format(LevelColor(q.level), q.level or 0, color, q.title or "?", collapsedMark)
     local line = AddLine(text, 0)
     line.questID, line.logIndex = q.questID, q.bqtLogIndex
     titleLines[#titleLines + 1] = line
     if not questCollapsed then
         if complete then
-            AddLine("|cff20ff20" .. TEXT.ready .. "|r", INDENT, "|cff20ff20").questID = q.questID
+            AddLine(COLOR.done .. TEXT.ready .. "|r", INDENT, COLOR.done).questID = q.questID
         else
             for _, obj in ipairs(C_QuestLog.GetQuestObjectives(q.questID) or {}) do
                 if obj.text and obj.text ~= "" then
-                    local c = obj.finished and "|cff20ff20" or "|cffffffff"
+                    local c = obj.finished and COLOR.done or COLOR.objective
                     AddLine(c .. obj.text .. "|r", INDENT, c).questID = q.questID
                 end
             end
@@ -886,7 +946,7 @@ end
 
 local function RenderQuests(quests)
     if #quests == 0 then
-        AddLine("|cff808080No quests for this zone|r", 0)
+        AddLine(COLOR.muted .. (db.zoneFilter and TEXT.noQuestsZone or TEXT.noQuests) .. "|r", 0)
         return
     end
     local trackedID = C_SuperTrack.GetSuperTrackedQuestID()
@@ -915,13 +975,13 @@ local function RenderRecipes(recipes)
     for _, recipeID in ipairs(recipes) do
         local schematic = C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
         local name = schematic.name or "?"
-        local line = AddLine("|cffffd100" .. name .. "|r", 0)
+        local line = AddLine(COLOR.quest .. name .. "|r", 0)
         line.recipeID, line.recipeName = recipeID, name
         for _, slot in ipairs(schematic.reagentSlotSchematics) do
             local reagent = slot.reagents[1]
             if slot.reagentType == Enum.CraftingReagentType.Basic and reagent and reagent.itemID then
                 local have = C_Item.GetItemCount(reagent.itemID)
-                local c = have >= slot.quantityRequired and "|cff20ff20" or "|cffffffff"
+                local c = have >= slot.quantityRequired and COLOR.done or COLOR.objective
                 local itemName = C_Item.GetItemNameByID(reagent.itemID) or "..."
                 line = AddLine(("%s%s %d/%d|r"):format(c, itemName, have, slot.quantityRequired), INDENT, c)
                 line.recipeID, line.recipeName = recipeID, name
@@ -1129,7 +1189,7 @@ end
 -- Settings panel (Options > AddOns)
 ---------------------------------------------------------------------------
 local function RegisterSettings()
-    local category = Settings.RegisterVerticalLayoutCategory("|cff33ff99Better|rQuestTracker")
+    local category = Settings.RegisterVerticalLayoutCategory(BRAND)
 
     local function Proxy(key, varType, name, setter)
         return Settings.RegisterProxySetting(category, "BQT_" .. key, varType, name, DEFAULTS[key],
@@ -1144,12 +1204,13 @@ local function RegisterSettings()
         Settings.CreateCheckbox(category, setting, tooltip)
     end
 
-    local function Slider(key, name, tooltip, min, max, step, setter, format)
+    local function Slider(key, name, tooltip, setter, format)
         local setting = Proxy(key, Settings.VarType.Number, name, function(value)
             setter(value)
             Refresh()
         end)
-        local options = Settings.CreateSliderOptions(min, max, step)
+        local lim = LIMITS[key]
+        local options = Settings.CreateSliderOptions(lim.min, lim.max, lim.step)
         options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(value)
             return format:format(value)
         end)
@@ -1164,7 +1225,7 @@ local function RegisterSettings()
         UntrackHighLevelInLog()
         RequestRender()
     end)
-    Slider("skipLevelDiff", "High-level threshold", "Levels above your own that count as high-level.", 1, 10, 1,
+    Slider("skipLevelDiff", "High-level threshold", "Levels above your own that count as high-level.",
         function(value)
             db.skipLevelDiff = value
             RetrackAllowed()
@@ -1174,11 +1235,9 @@ local function RegisterSettings()
     Checkbox("sortByDistance", "Sort by distance", "Show the nearest quest first.", RequestRender)
     Checkbox("completedLast", "Finished quests last", "Move quests that are ready to turn in to the bottom of their zone.", RequestRender)
     Checkbox("showRecipes", "Show tracked recipes", "List recipes tracked in the profession window below your quests, with the reagents you carry.", RequestRender)
-    Slider("scale", "Scale", "Size of the tracker.", 0.5, 2.5, 0.05,
-        SetScaleKeepingPosition, "%.2f")
-    Slider("width", "Width", "Width of the tracker in pixels.", 150, 600, 10,
-        function(value) db.width = value end, "%d")
-    Slider("maxHeight", "Maximum height", "Taller lists scroll with the mouse wheel.", 150, 1200, 10,
+    Slider("scale", "Scale", "Size of the tracker.", SetScaleKeepingPosition, "%.2f")
+    Slider("width", "Width", "Width of the tracker in pixels.", function(value) db.width = value end, "%d")
+    Slider("maxHeight", "Maximum height", "Taller lists scroll with the mouse wheel.",
         function(value) db.maxHeight = value end, "%d")
 
     Settings.RegisterAddOnCategory(category)
@@ -1197,20 +1256,14 @@ SlashCmdList.BETTERQUESTTRACKER = function(msg)
     elseif cmd == "move" or cmd == "unlock" or cmd == "lock" then
         if cmd == "move" then db.locked = not db.locked else db.locked = (cmd == "lock") end
         Print(db.locked and "locked" or "unlocked: drag to move, mouse wheel to scale")
-    elseif cmd == "scale" then
-        local s = tonumber(arg)
-        if s and s >= 0.5 and s <= 2.5 then
-            SetScaleKeepingPosition(s)
-        else
-            Print("usage: /bqt scale 0.5-2.5 (current " .. db.scale .. ")")
+    elseif cmd == "scale" or cmd == "width" or cmd == "height" then
+        local key = cmd == "height" and "maxHeight" or cmd
+        local lim, value = LIMITS[key], tonumber(arg)
+        if not value or value < lim.min or value > lim.max then
+            Print(("usage: /bqt %s %s-%s (current %s)"):format(cmd, lim.min, lim.max, db[key]))
             return
         end
-    elseif cmd == "width" then
-        local w = tonumber(arg)
-        if w and w >= 150 and w <= 600 then db.width = w else Print("usage: /bqt width 150-600") return end
-    elseif cmd == "height" then
-        local h = tonumber(arg)
-        if h and h >= 150 and h <= 1200 then db.maxHeight = h else Print("usage: /bqt height 150-1200") return end
+        if key == "scale" then SetScaleKeepingPosition(value) else db[key] = value end
     elseif cmd == "zone" then
         db.zoneFilter = not db.zoneFilter
         Print("zone filter " .. (db.zoneFilter and "on" or "off"))
@@ -1239,9 +1292,9 @@ SlashCmdList.BETTERQUESTTRACKER = function(msg)
         Print("commands:")
         print("  /bqt - open settings")
         print("  /bqt move - toggle move mode (drag + mouse wheel scale)")
-        print("  /bqt scale <0.5-2.5>")
-        print("  /bqt width <150-600>")
-        print("  /bqt height <150-1200> - max height before scrolling")
+        print(("  /bqt scale <%s-%s>"):format(LIMITS.scale.min, LIMITS.scale.max))
+        print(("  /bqt width <%s-%s>"):format(LIMITS.width.min, LIMITS.width.max))
+        print(("  /bqt height <%s-%s> - max height before scrolling"):format(LIMITS.maxHeight.min, LIMITS.maxHeight.max))
         print("  /bqt zone - toggle zone filter")
         print("  /bqt sort - toggle sort by distance")
         print("  /bqt watch - toggle following quest log checkboxes")
