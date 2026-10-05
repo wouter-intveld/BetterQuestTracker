@@ -1256,85 +1256,96 @@ end
 
 ---------------------------------------------------------------------------
 -- Events
+-- One handler per event, called as handler(event, ...). Handlers that change
+-- what the tracker shows end in RequestRender(event).
 ---------------------------------------------------------------------------
-frame:RegisterEvent("ADDON_LOADED")
-frame:SetScript("OnEvent", function(_, event, arg1, arg2)
-    if event == "ADDON_LOADED" then
-        if arg1 ~= ADDON then return end
-        BetterQuestTrackerDB = BetterQuestTrackerDB or {}
-        db = BetterQuestTrackerDB
-        for k, v in pairs(DEFAULTS) do
-            if db[k] == nil then db[k] = type(v) == "table" and CopyTable(v) or v end
-        end
-        BetterQuestTrackerCharDB = BetterQuestTrackerCharDB or {}
-        char = BetterQuestTrackerCharDB
-        for k, v in pairs(CHAR_DEFAULTS) do
-            if char[k] == nil then char[k] = CopyTable(v) end
-        end
-        frame:UnregisterEvent("ADDON_LOADED")
-        for _, e in ipairs({
-            "PLAYER_ENTERING_WORLD", "QUEST_LOG_UPDATE", "QUEST_WATCH_LIST_CHANGED",
-            "QUEST_ACCEPTED", "QUEST_REMOVED",
-            "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS",
-            "PLAYER_REGEN_ENABLED", "SUPER_TRACKING_CHANGED", "BAG_UPDATE_COOLDOWN",
-            "PLAYER_LEVEL_UP", "PLAYER_TARGET_CHANGED", "UPDATE_INVENTORY_ALERTS",
-            "TRACKED_RECIPE_UPDATE", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED",
-        }) do
-            frame:RegisterEvent(e)
-        end
-        RegisterSettings()
-        -- Distance changes as you walk; only redraw when the nearest-first order breaks.
-        C_Timer.NewTicker(2, OnSortTick)
-        ApplyLayout()
-        frame:Show()
-        return
-    end
-    if event == "PLAYER_REGEN_ENABLED" then
-        UpdateBlizzardTracker()
-        if itemsDirty then UpdateItemButtons() end
-        return
-    end
-    if event == "BAG_UPDATE_COOLDOWN" then
-        UpdateItemCooldowns()
-        return
-    end
-    if event == "PLAYER_TARGET_CHANGED" then
-        UpdateRangeTicker()
-        return
-    end
-    if event == "UPDATE_INVENTORY_ALERTS" then
-        RecheckDurabilitySoon()
-        return
-    end
-    -- Reagent counts and names only matter while recipes are on screen.
-    if (event == "BAG_UPDATE_DELAYED" or event == "GET_ITEM_INFO_RECEIVED") and recipesTracked == 0 then
-        return
-    end
-    if event == "PLAYER_ENTERING_WORLD" then
-        ApplyLayout()
-        UpdateBlizzardTracker()
-        HookDurabilityFrame()
-    end
-    if event == "PLAYER_LEVEL_UP" then
-        -- UnitLevel can still report the old level here; use the event's new level.
-        RetrackAllowed(arg1)
-    end
-    if event == "QUEST_REMOVED" and arg1 then
-        char.collapsedQuests[arg1] = nil
-        char.autoUntracked[arg1] = nil
-    end
-    if event == "QUEST_WATCH_LIST_CHANGED" and arg1 and arg2 then
-        char.autoUntracked[arg1] = nil
-    end
-    if (event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "ZONE_CHANGED_NEW_AREA")
-        and not ZoneNamesChanged() then
-        return
-    end
-    if event == "QUEST_ACCEPTED" and db.skipHighLevel then
+local EVENTS = {}
+
+function EVENTS.PLAYER_ENTERING_WORLD(event)
+    ApplyLayout()
+    UpdateBlizzardTracker()
+    HookDurabilityFrame()
+    RequestRender(event)
+end
+
+function EVENTS.PLAYER_REGEN_ENABLED()
+    UpdateBlizzardTracker()
+    if itemsDirty then UpdateItemButtons() end
+end
+
+EVENTS.BAG_UPDATE_COOLDOWN = UpdateItemCooldowns
+EVENTS.PLAYER_TARGET_CHANGED = UpdateRangeTicker
+EVENTS.UPDATE_INVENTORY_ALERTS = RecheckDurabilitySoon
+
+function EVENTS.PLAYER_LEVEL_UP(event, newLevel)
+    -- UnitLevel can still report the old level here; use the event's.
+    RetrackAllowed(newLevel)
+    RequestRender(event)
+end
+
+function EVENTS.QUEST_REMOVED(event, questID)
+    char.collapsedQuests[questID] = nil
+    char.autoUntracked[questID] = nil
+    RequestRender(event)
+end
+
+function EVENTS.QUEST_WATCH_LIST_CHANGED(event, questID, added)
+    -- Checked by hand in the quest log, so it is no longer ours to re-check.
+    if questID and added then char.autoUntracked[questID] = nil end
+    RequestRender(event)
+end
+
+function EVENTS.QUEST_ACCEPTED(event, arg1, arg2)
+    if db.skipHighLevel then
         -- Older clients pass (logIndex, questID), Retail passes (questID).
         -- Blizzard auto-watches after this event, so untrack slightly later.
         local questID = arg2 or arg1
         C_Timer.After(0.5, function() UntrackIfTooHigh(questID) end)
     end
     RequestRender(event)
+end
+
+local function OnZoneChanged(event)
+    if ZoneNamesChanged() then RequestRender(event) end
+end
+EVENTS.ZONE_CHANGED = OnZoneChanged
+EVENTS.ZONE_CHANGED_INDOORS = OnZoneChanged
+EVENTS.ZONE_CHANGED_NEW_AREA = OnZoneChanged
+
+-- Reagent counts and names only matter while recipes are on screen.
+local function OnBagChanged(event)
+    if recipesTracked > 0 then RequestRender(event) end
+end
+EVENTS.BAG_UPDATE_DELAYED = OnBagChanged
+EVENTS.GET_ITEM_INFO_RECEIVED = OnBagChanged
+
+EVENTS.QUEST_LOG_UPDATE = RequestRender
+EVENTS.SUPER_TRACKING_CHANGED = RequestRender
+EVENTS.TRACKED_RECIPE_UPDATE = RequestRender
+
+local function Init()
+    BetterQuestTrackerDB = BetterQuestTrackerDB or {}
+    db = BetterQuestTrackerDB
+    for k, v in pairs(DEFAULTS) do
+        if db[k] == nil then db[k] = type(v) == "table" and CopyTable(v) or v end
+    end
+    BetterQuestTrackerCharDB = BetterQuestTrackerCharDB or {}
+    char = BetterQuestTrackerCharDB
+    for k, v in pairs(CHAR_DEFAULTS) do
+        if char[k] == nil then char[k] = CopyTable(v) end
+    end
+    for event in pairs(EVENTS) do frame:RegisterEvent(event) end
+    frame:SetScript("OnEvent", function(_, event, ...) EVENTS[event](event, ...) end)
+    RegisterSettings()
+    -- Distance changes as you walk; only redraw when the nearest-first order breaks.
+    C_Timer.NewTicker(2, OnSortTick)
+    ApplyLayout()
+    frame:Show()
+end
+
+frame:RegisterEvent("ADDON_LOADED")
+frame:SetScript("OnEvent", function(_, _, name)
+    if name ~= ADDON then return end
+    frame:UnregisterEvent("ADDON_LOADED")
+    Init()
 end)
