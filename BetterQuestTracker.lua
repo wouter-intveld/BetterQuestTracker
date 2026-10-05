@@ -33,7 +33,6 @@ local renderCount = 0
 local slowestRender, slowestReason, lastRender = 0, "none", 0
 local titleLines = {}
 local UpdateItemButtons, Render, Refresh -- defined below, called from frame scripts set up above them
-local MAX_LINES = 150
 local HEADER_HEIGHT = 32
 local FOOTER_HEIGHT = 14
 local SCROLL_STEP = 40
@@ -349,7 +348,6 @@ local function OnRecipeClick(line, button)
 end
 
 local lines = {}
-local BULLET_WIDTH = 8
 
 local function GetLine(i)
     local line = lines[i]
@@ -776,131 +774,126 @@ end
 local zoneCounts = {}
 local recipesTracked = 0 -- recipes shown in the last redraw; bag changes only matter then
 
-function Render(reason)
-    local startTime = debugprofilestop()
-    renderCount = renderCount + 1
-    local quests = CollectQuests()
-    wipe(shownOrder)
-    wipe(shownHeader)
-    wipe(titleLines)
-    for i, q in ipairs(quests) do
-        shownOrder[i] = q.questID
-        shownHeader[i] = q.bqtHeader
+-- Cursor of the redraw in progress: lines used so far, the y offset of the next
+-- line (negative, down from the top of the content) and the text width.
+local layout = { n = 0, y = 0, width = 0 }
+local BULLET_WIDTH = 8
+local INDENT = 10 -- objectives and reagents, under their quest or recipe
+
+-- Lays out the next line and returns it with its identity fields cleared; the
+-- caller tags it with a questID, logIndex, zone or recipeID as needed. With a
+-- bullet colour, "- " gets its own column so wrapped text lines up under itself.
+local function AddLine(text, indent, bulletColor)
+    layout.n = layout.n + 1
+    local line = GetLine(layout.n)
+    local width = layout.width - indent
+    line.questID, line.logIndex, line.zone, line.recipeID, line.recipeName = nil, nil, nil, nil, nil
+    if line.lastText ~= text or line.lastBullet ~= bulletColor or line.lastWidth ~= width then
+        line.lastText, line.lastBullet, line.lastWidth = text, bulletColor, width
+        local inset = bulletColor and BULLET_WIDTH or 0
+        line.bullet:SetText(bulletColor and bulletColor .. "-|r" or "")
+        line.text:SetPoint("TOPLEFT", inset, 0)
+        line:SetWidth(width)
+        line.text:SetWidth(width - inset)
+        line.text:SetText(text)
+        line.lastHeight = math.max(14, line.text:GetStringHeight())
+        line:SetHeight(line.lastHeight)
     end
-    UpdateHeader(#quests)
-
-    local n, y = 0, 0
-    local textWidth = db.width - 16
-
-    local function AddLine(text, questID, indent, zone, recipeID, recipeName)
-        if n >= MAX_LINES then return end
-        n = n + 1
-        local line = GetLine(n)
-        local width = textWidth - indent
-        line.questID = questID
-        line.zone = zone
-        line.recipeID, line.recipeName = recipeID, recipeName
-        if line.lastText ~= text or line.lastWidth ~= width then
-            line.lastText, line.lastWidth = text, width
-            local color, rest = text:match("^(|c%x%x%x%x%x%x%x%x)%- (.*)$")
-            local inset = color and BULLET_WIDTH or 0
-            line.bullet:SetText(color and color .. "-|r" or "")
-            line.text:SetPoint("TOPLEFT", inset, 0)
-            line:SetWidth(width)
-            line.text:SetWidth(width - inset)
-            line.text:SetText(color and color .. rest or text)
-            line.lastHeight = math.max(14, line.text:GetStringHeight())
-            line:SetHeight(line.lastHeight)
-        end
-        -- A line only ever has this one anchor, so SetPoint replaces it; skip it when nothing moved.
-        local x = 8 + indent
-        if line.lastX ~= x or line.lastY ~= y then
-            line.lastX, line.lastY = x, y
-            line:SetPoint("TOPLEFT", content, "TOPLEFT", x, y)
-        end
-        line:Show()
-        y = y - line.lastHeight - 2
+    -- A line only ever has this one anchor, so SetPoint replaces it; skip it when nothing moved.
+    local x = 8 + indent
+    if line.lastX ~= x or line.lastY ~= layout.y then
+        line.lastX, line.lastY = x, layout.y
+        line:SetPoint("TOPLEFT", content, "TOPLEFT", x, layout.y)
     end
+    line:Show()
+    layout.y = layout.y - line.lastHeight - 2
+    return line
+end
 
-    if not db.collapsed then
-        local trackedID = C_SuperTrack.GetSuperTrackedQuestID()
-        wipe(zoneCounts)
-        for _, q in ipairs(quests) do
-            zoneCounts[q.bqtHeader] = (zoneCounts[q.bqtHeader] or 0) + 1
-        end
-        local lastHeader
-        for _, q in ipairs(quests) do
-            local zoneCollapsed = db.collapsedZones[q.bqtHeader]
-            if q.bqtHeader ~= lastHeader then
-                lastHeader = q.bqtHeader
-                if n > 0 then y = y - 4 end
-                if zoneCollapsed then
-                    AddLine(("|cffb0b0ff+ %s (%d)|r"):format(lastHeader, zoneCounts[lastHeader]), nil, 0, lastHeader)
-                else
-                    AddLine("|cffb0b0ff" .. lastHeader .. "|r", nil, 0, lastHeader)
-                end
-            end
-            if not zoneCollapsed then
-                local questCollapsed = char.collapsedQuests[q.questID]
-                local complete = C_QuestLog.IsComplete(q.questID)
-                local color = complete and "|cff20ff20" or "|cffffd100"
-                if q.questID == trackedID then color = "|cff66ccff" end
-                local titleIndex = n + 1
-                local collapsedMark = questCollapsed and " |cff808080+|r" or ""
-                AddLine(("%s[%d]|r %s%s|r%s"):format(LevelColor(q.level), q.level or 0, color, q.title or "?", collapsedMark), q.questID, 0)
-                if n == titleIndex then
-                    lines[n].logIndex = q.bqtLogIndex
-                    titleLines[#titleLines + 1] = lines[n]
-                end
-                if complete and not questCollapsed then
-                    AddLine("|cff20ff20- " .. TEXT.ready .. "|r", q.questID, 10)
-                elseif not questCollapsed then
-                    for _, obj in ipairs(C_QuestLog.GetQuestObjectives(q.questID) or {}) do
-                        if obj.text and obj.text ~= "" then
-                            local c = obj.finished and "|cff20ff20" or "|cffffffff"
-                            AddLine(c .. "- " .. obj.text .. "|r", q.questID, 10)
-                        end
-                    end
-                end
-                y = y - 4
-            end
-        end
-        if #quests == 0 then
-            AddLine("|cff808080No quests for this zone|r", nil, 0)
-        end
-    end
+-- Zone and recipe headers. A collapsed one shows its count; middle-click toggles it.
+local function AddSectionHeader(name, collapsedCount)
+    if layout.n > 0 then layout.y = layout.y - 4 end
+    local text = collapsedCount and ("|cffb0b0ff+ %s (%d)|r"):format(name, collapsedCount)
+        or "|cffb0b0ff" .. name .. "|r"
+    AddLine(text, 0).zone = name
+end
 
-    -- Recipes tracked in the profession window, with reagents in bags / needed.
-    local recipes = db.showRecipes and C_TradeSkillUI.GetRecipesTracked(false) or {}
-    recipesTracked = #recipes
-    if not db.collapsed and #recipes > 0 then
-        local key = TEXT.recipes
-        if n > 0 then y = y - 4 end
-        if db.collapsedZones[key] then
-            AddLine(("|cffb0b0ff+ %s (%d)|r"):format(key, #recipes), nil, 0, key)
+local function RenderQuest(q, trackedID)
+    local questCollapsed = char.collapsedQuests[q.questID]
+    local complete = C_QuestLog.IsComplete(q.questID)
+    local color = complete and "|cff20ff20" or "|cffffd100"
+    if q.questID == trackedID then color = "|cff66ccff" end
+    local collapsedMark = questCollapsed and " |cff808080+|r" or ""
+    local text = ("%s[%d]|r %s%s|r%s"):format(LevelColor(q.level), q.level or 0, color, q.title or "?", collapsedMark)
+    local line = AddLine(text, 0)
+    line.questID, line.logIndex = q.questID, q.bqtLogIndex
+    titleLines[#titleLines + 1] = line
+    if not questCollapsed then
+        if complete then
+            AddLine("|cff20ff20" .. TEXT.ready .. "|r", INDENT, "|cff20ff20").questID = q.questID
         else
-            AddLine("|cffb0b0ff" .. key .. "|r", nil, 0, key)
-            for _, recipeID in ipairs(recipes) do
-                local schematic = C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
-                local name = schematic.name or "?"
-                AddLine("|cffffd100" .. name .. "|r", nil, 0, nil, recipeID, name)
-                for _, slot in ipairs(schematic.reagentSlotSchematics) do
-                    local reagent = slot.reagents[1]
-                    if slot.reagentType == Enum.CraftingReagentType.Basic and reagent and reagent.itemID then
-                        local have = C_Item.GetItemCount(reagent.itemID)
-                        local c = have >= slot.quantityRequired and "|cff20ff20" or "|cffffffff"
-                        local itemName = C_Item.GetItemNameByID(reagent.itemID) or "..."
-                        AddLine(("%s- %s %d/%d|r"):format(c, itemName, have, slot.quantityRequired),
-                            nil, 10, nil, recipeID, name)
-                    end
+            for _, obj in ipairs(C_QuestLog.GetQuestObjectives(q.questID) or {}) do
+                if obj.text and obj.text ~= "" then
+                    local c = obj.finished and "|cff20ff20" or "|cffffffff"
+                    AddLine(c .. obj.text .. "|r", INDENT, c).questID = q.questID
                 end
-                y = y - 4
             end
         end
     end
-    for i = n + 1, #lines do lines[i]:Hide() end
+    layout.y = layout.y - 4
+end
 
-    local contentHeight = math.max(1, -y)
+local function RenderQuests(quests)
+    if #quests == 0 then
+        AddLine("|cff808080No quests for this zone|r", 0)
+        return
+    end
+    local trackedID = C_SuperTrack.GetSuperTrackedQuestID()
+    wipe(zoneCounts)
+    for _, q in ipairs(quests) do
+        zoneCounts[q.bqtHeader] = (zoneCounts[q.bqtHeader] or 0) + 1
+    end
+    local lastHeader
+    for _, q in ipairs(quests) do
+        local zone = q.bqtHeader
+        local zoneCollapsed = db.collapsedZones[zone]
+        if zone ~= lastHeader then
+            lastHeader = zone
+            AddSectionHeader(zone, zoneCollapsed and zoneCounts[zone])
+        end
+        if not zoneCollapsed then RenderQuest(q, trackedID) end
+    end
+end
+
+-- Recipes tracked in the profession window, with reagents in bags / needed.
+local function RenderRecipes(recipes)
+    if #recipes == 0 then return end
+    local collapsed = db.collapsedZones[TEXT.recipes]
+    AddSectionHeader(TEXT.recipes, collapsed and #recipes)
+    if collapsed then return end
+    for _, recipeID in ipairs(recipes) do
+        local schematic = C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
+        local name = schematic.name or "?"
+        local line = AddLine("|cffffd100" .. name .. "|r", 0)
+        line.recipeID, line.recipeName = recipeID, name
+        for _, slot in ipairs(schematic.reagentSlotSchematics) do
+            local reagent = slot.reagents[1]
+            if slot.reagentType == Enum.CraftingReagentType.Basic and reagent and reagent.itemID then
+                local have = C_Item.GetItemCount(reagent.itemID)
+                local c = have >= slot.quantityRequired and "|cff20ff20" or "|cffffffff"
+                local itemName = C_Item.GetItemNameByID(reagent.itemID) or "..."
+                line = AddLine(("%s%s %d/%d|r"):format(c, itemName, have, slot.quantityRequired), INDENT, c)
+                line.recipeID, line.recipeName = recipeID, name
+            end
+        end
+        layout.y = layout.y - 4
+    end
+end
+
+-- Sizes the frame to the laid-out content: up to maxHeight, beyond that the
+-- list scrolls and the footer says so.
+local function FitFrame()
+    local contentHeight = math.max(1, -layout.y)
     local scrollable = contentHeight > db.maxHeight
     local visible = db.collapsed and 0 or math.min(contentHeight, db.maxHeight)
     content:SetHeight(contentHeight)
@@ -914,6 +907,30 @@ function Render(reason)
     frame:SetClampRectInsets(0, 0, 0, height - HEADER_HEIGHT)
     if scrollable then UpdateMoreText() else moreText:Hide() end
     if AvoidOffset() ~= frame.avoidOffset then PlaceFrame() end
+end
+
+function Render(reason)
+    local startTime = debugprofilestop()
+    renderCount = renderCount + 1
+    local quests = CollectQuests()
+    wipe(shownOrder)
+    wipe(shownHeader)
+    for i, q in ipairs(quests) do
+        shownOrder[i] = q.questID
+        shownHeader[i] = q.bqtHeader
+    end
+    UpdateHeader(#quests)
+
+    layout.n, layout.y, layout.width = 0, 0, db.width - 16
+    wipe(titleLines)
+    local recipes = db.showRecipes and C_TradeSkillUI.GetRecipesTracked(false) or {}
+    recipesTracked = #recipes
+    if not db.collapsed then
+        RenderQuests(quests)
+        RenderRecipes(recipes)
+    end
+    for i = layout.n + 1, #lines do lines[i]:Hide() end
+    FitFrame()
     UpdateItemButtons()
 
     lastRender = debugprofilestop() - startTime
