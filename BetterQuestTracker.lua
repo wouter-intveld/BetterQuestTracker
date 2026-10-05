@@ -214,15 +214,16 @@ lockButton:SetPoint("BOTTOMRIGHT", levelButton, "BOTTOMLEFT", -ICON_GAP, 0)
 lockButton:SetFrameLevel(moveOverlay:GetFrameLevel() + 10)
 
 -- The lock and the +N stay out of sight until the header is hovered: the lock
--- also shows while unlocked, the +N also while it is showing the high-level
--- quests, and only with that option on at all. Alpha rather than Hide keeps the
--- +N's slot, so the lock never shifts. Runs as the mouse enters or leaves the
--- header or any control, because moving onto a control leaves the header.
+-- also shows while unlocked, the +N also while it is hiding the high-level
+-- quests (an active filter, like the zone filter icon), and only with that
+-- option on at all. Alpha rather than Hide keeps the +N's slot, so the lock
+-- never shifts. Runs as the mouse enters or leaves the header or any control,
+-- because moving onto a control leaves the header.
 local function UpdateHeaderHover()
     local hover = header:IsMouseOver()
     lockButton:SetShown(hover or not db.locked)
     lockButton.icon:SetAlpha((not db.locked or lockButton:IsMouseOver()) and 1 or ICON_DIM)
-    levelButton:SetAlpha(db.skipHighLevel and (db.showHighLevel or hover) and 1 or 0)
+    levelButton:SetAlpha(db.skipHighLevel and (not db.showHighLevel or hover) and 1 or 0)
 end
 
 -- A control's click toggles a setting and redraws; its tooltip describes the

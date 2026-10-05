@@ -61,8 +61,9 @@ removes it from the tracker, and right-click shows the recipe options.
 In the header, from left to right: the padlock unlocks the tracker, the skull
 shows or hides high-level quests (only while that option is on), and the filter
 switches the zone filter. The padlock only shows while the mouse is over the
-header, and so does the skull unless high-level quests are showing. The button
-just outside the tracker's top-right corner collapses or expands it.
+header; the skull stays visible while it hides high-level quests and only
+shows on hover while they are showing. The button just outside the tracker's
+top-right corner collapses or expands it.
 
 With the tracker unlocked, the padlock stays lit, drag the tracker to move it,
 and use the mouse wheel to scale it. The current scale shows as a percentage,
