@@ -154,6 +154,14 @@ levelButton:SetPoint("BOTTOMRIGHT", modeText, "BOTTOMLEFT", -8, 0)
 levelButton.text = levelButton:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 levelButton.text:SetPoint("BOTTOMRIGHT")
 
+-- +3 stays out of sight until the header is hovered, unless it is showing the
+-- high-level quests; with the option off it stays hidden. Alpha rather than Hide
+-- keeps its slot, so move never shifts.
+local function UpdateLevelAlpha()
+    local visible = db.skipHighLevel and (db.showHighLevel or header:IsMouseOver())
+    levelButton:SetAlpha(visible and 1 or 0)
+end
+
 local scroll = CreateFrame("ScrollFrame", nil, frame)
 scroll:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT)
 scroll:SetPoint("RIGHT")
@@ -742,9 +750,9 @@ function Render(reason)
     title:SetText(("%s (%d)"):format(TEXT.quests, #quests))
     levelButton.text:SetText(("%s+%d|r"):format(db.showHighLevel and "|cff808080" or "|cffff8040", db.skipLevelDiff))
     levelButton:SetSize(levelButton.text:GetStringWidth(), levelButton.text:GetStringHeight())
-    -- The +3 only exists while the option is on; move then sits next to zone.
-    levelButton:SetShown(db.skipHighLevel)
-    lockButton:SetPoint("BOTTOMRIGHT", db.skipHighLevel and levelButton or modeText, "BOTTOMLEFT", -8, 0)
+    -- The +3 only works while the option is on; its slot stays either way.
+    levelButton:EnableMouse(db.skipHighLevel)
+    UpdateLevelAlpha()
     modeText:SetText(db.zoneFilter and "zone" or "all")
     collapseButton.v:SetShown(db.collapsed)
 
@@ -1108,6 +1116,7 @@ levelButton:SetScript("OnLeave", GameTooltip_Hide)
 -- Must run after every SetScript on these frames, which would drop the hooks.
 local function OnHeaderHoverChanged()
     UpdateLockLabel(lockButton:IsVisible() and lockButton:IsMouseOver())
+    UpdateLevelAlpha()
 end
 for _, f in ipairs({ header, levelButton, modeButton, collapseButton }) do
     f:HookScript("OnEnter", OnHeaderHoverChanged)

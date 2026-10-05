@@ -61,7 +61,7 @@ In the header, from left to right: `move` unlocks the tracker, `+3` shows or
 hides high-level quests (only while that option is on), `zone` switches the
 zone filter, and the `-` / `+`
 button collapses or expands the tracker. `move` only shows while the mouse is
-over the header.
+over the header, and so does `+3` unless high-level quests are showing.
 
 With the tracker unlocked, `move` becomes `lock`, drag the tracker to move it,
 and use the mouse wheel to scale it. The current scale shows as a percentage,
