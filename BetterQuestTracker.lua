@@ -98,24 +98,28 @@ local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 title:SetPoint("BOTTOMLEFT")
 title:SetJustifyH("LEFT")
 
-local modeText = header:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-modeText:SetPoint("BOTTOMRIGHT", -22, 1)
+-- Header controls are small atlas icons in their own colours, dimmed until hovered.
+local ICON_SIZE, ICON_GAP, ICON_DIM = 14, 6, 0.6
+local function AddIcon(parent)
+    local t = parent:CreateTexture(nil, "OVERLAY")
+    t:SetAlpha(ICON_DIM)
+    return t
+end
+
+local modeIcon = AddIcon(header)
+modeIcon:SetSize(ICON_SIZE, ICON_SIZE)
+modeIcon:SetPoint("BOTTOMRIGHT", 0, -1)
 
 -- Drawn from two thin bars so it matches the flat header text instead of a bulky stock button.
-local collapseButton = CreateFrame("Button", nil, header)
-collapseButton:SetSize(16, 16)
-collapseButton:SetPoint("RIGHT", 0, -1)
-collapseButton.h = collapseButton:CreateTexture(nil, "ARTWORK")
-collapseButton.h:SetSize(7, 2)
-collapseButton.h:SetPoint("CENTER")
-collapseButton.v = collapseButton:CreateTexture(nil, "ARTWORK")
-collapseButton.v:SetSize(2, 7)
-collapseButton.v:SetPoint("CENTER")
+-- Sits outside the tracker, on its top-right corner.
+local collapseButton = CreateFrame("Button", nil, frame)
+collapseButton:SetSize(ICON_SIZE, ICON_SIZE)
+collapseButton:SetPoint("BOTTOMLEFT", frame, "TOPRIGHT")
+collapseButton.icon = AddIcon(collapseButton)
+collapseButton.icon:SetAllPoints()
 local function SetCollapseColor(c)
-    collapseButton.h:SetColorTexture(c, c, c, 1)
-    collapseButton.v:SetColorTexture(c, c, c, 1)
+    collapseButton.icon:SetAlpha(c)
 end
-SetCollapseColor(0.5)
 collapseButton:SetScript("OnClick", function(self)
     db.collapsed = not db.collapsed
     Render()
@@ -128,31 +132,36 @@ collapseButton:SetScript("OnEnter", function(self)
     GameTooltip:Show()
 end)
 collapseButton:SetScript("OnLeave", function()
-    SetCollapseColor(0.5)
+    SetCollapseColor(ICON_DIM)
     GameTooltip_Hide()
 end)
 
 local modeButton = CreateFrame("Button", nil, header)
-modeButton:SetAllPoints(modeText)
+modeButton:SetAllPoints(modeIcon)
 modeButton:SetScript("OnClick", function(self)
     db.zoneFilter = not db.zoneFilter
     Render()
     self:GetScript("OnEnter")(self)
 end)
 modeButton:SetScript("OnEnter", function(self)
+    modeIcon:SetAlpha(1)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine("Zone filter")
     GameTooltip:AddLine(db.zoneFilter and "Showing quests in your current zone" or "Showing all quests", 1, 1, 1)
     GameTooltip:AddLine("Click: toggle", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end)
-modeButton:SetScript("OnLeave", GameTooltip_Hide)
+modeButton:SetScript("OnLeave", function()
+    modeIcon:SetAlpha(ICON_DIM)
+    GameTooltip_Hide()
+end)
 
 local levelButton = CreateFrame("Button", nil, header)
-levelButton:SetSize(16, 12)
-levelButton:SetPoint("BOTTOMRIGHT", modeText, "BOTTOMLEFT", -8, 0)
-levelButton.text = levelButton:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-levelButton.text:SetPoint("BOTTOMRIGHT")
+levelButton:SetSize(ICON_SIZE, ICON_SIZE)
+levelButton:SetPoint("BOTTOMRIGHT", modeIcon, "BOTTOMLEFT", -ICON_GAP, 0)
+levelButton.icon = levelButton:CreateTexture(nil, "OVERLAY")
+levelButton.icon:SetAllPoints()
+levelButton.icon:SetAtlas("UI-HUD-UnitFrame-Target-HighLevelTarget_Icon")
 
 -- +3 stays out of sight until the header is hovered, unless it is showing the
 -- high-level quests; with the option off it stays hidden. Alpha rather than Hide
@@ -187,23 +196,16 @@ moveOverlay.text:SetJustifyH("CENTER")
 
 -- Parented to the frame, not the header, so it stays clickable and undimmed above the move overlay.
 local lockButton = CreateFrame("Button", nil, frame)
-lockButton:SetSize(16, 12)
-lockButton:SetPoint("BOTTOMRIGHT", levelButton, "BOTTOMLEFT", -8, 0)
+lockButton:SetSize(ICON_SIZE, ICON_SIZE)
+lockButton:SetPoint("BOTTOMRIGHT", levelButton, "BOTTOMLEFT", -ICON_GAP, 0)
 lockButton:SetFrameLevel(moveOverlay:GetFrameLevel() + 10)
-lockButton.text = lockButton:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-lockButton.text:SetPoint("BOTTOMRIGHT")
+lockButton.icon = AddIcon(lockButton)
+lockButton.icon:SetAllPoints()
+lockButton.icon:SetAtlas("communities-icon-lock")
 
 -- "move" (locked) only shows while hovering the header; "lock" (unlocked) always shows.
 local function UpdateLockLabel(hover)
-    lockButton.text:SetText(db.locked and "move" or "lock")
-    if hover then
-        lockButton.text:SetTextColor(1, 1, 1)
-    elseif db.locked then
-        lockButton.text:SetTextColor(0.5, 0.5, 0.5)
-    else
-        lockButton.text:SetTextColor(1, 0.82, 0)
-    end
-    lockButton:SetSize(lockButton.text:GetStringWidth(), lockButton.text:GetStringHeight())
+    lockButton.icon:SetAlpha((hover or not db.locked) and 1 or ICON_DIM)
     lockButton:SetShown(not db.locked or header:IsMouseOver())
 end
 
@@ -748,13 +750,13 @@ function Render(reason)
         shownHeader[i] = q.bqtHeader
     end
     title:SetText(("%s (%d)"):format(TEXT.quests, #quests))
-    levelButton.text:SetText(("%s+%d|r"):format(db.showHighLevel and "|cff808080" or "|cffff8040", db.skipLevelDiff))
-    levelButton:SetSize(levelButton.text:GetStringWidth(), levelButton.text:GetStringHeight())
+    levelButton.icon:SetDesaturated(db.showHighLevel)
     -- The +3 only works while the option is on; its slot stays either way.
     levelButton:EnableMouse(db.skipHighLevel)
     UpdateLevelAlpha()
-    modeText:SetText(db.zoneFilter and "zone" or "all")
-    collapseButton.v:SetShown(db.collapsed)
+    modeIcon:SetAtlas("Map-Filter-Button")
+    modeIcon:SetDesaturated(not db.zoneFilter)
+    collapseButton.icon:SetAtlas(db.collapsed and "UI-QuestTrackerButton-Expand-All" or "UI-QuestTrackerButton-Collapse-All")
 
     local n, y = 0, 0
     local textWidth = db.width - 16

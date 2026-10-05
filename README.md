@@ -12,7 +12,8 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
 ## What it does
 
 - Shows quests for your current zone, grouped under the zone headers from your
-  quest log. Click `zone` in the header to switch to `all` and back.
+  quest log. Click the filter icon in the header to show all quests and back;
+  it turns grey while all quests show.
 - Sorts quests by distance, nearest first. The tracker checks every 2 seconds
   and only redraws when the order changes. Optionally, quests that are ready
   to turn in move to the bottom of their zone (off by default).
@@ -21,7 +22,7 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
 - Optionally unchecks newly accepted quests that are 3 or more levels above
   you. This is off by default; turn it on in the settings, where the threshold
   is configurable too. When you level up, or turn the option off, the
-  addon checks those quests again. While the option is on, the `+3` button in
+  addon checks those quests again. While the option is on, the skull icon in
   the header shows or hides those quests in the tracker; it turns grey while
   they show.
 - Adds a button left of each quest that has a usable quest item. The button
@@ -57,13 +58,13 @@ On a zone heading, middle-click collapses or expands the whole zone.
 On a recipe, left-click opens it in the profession window, shift-click
 removes it from the tracker, and right-click shows the recipe options.
 
-In the header, from left to right: `move` unlocks the tracker, `+3` shows or
-hides high-level quests (only while that option is on), `zone` switches the
-zone filter, and the `-` / `+`
-button collapses or expands the tracker. `move` only shows while the mouse is
-over the header, and so does `+3` unless high-level quests are showing.
+In the header, from left to right: the padlock unlocks the tracker, the skull
+shows or hides high-level quests (only while that option is on), and the filter
+switches the zone filter. The padlock only shows while the mouse is over the
+header, and so does the skull unless high-level quests are showing. The button
+just outside the tracker's top-right corner collapses or expands it.
 
-With the tracker unlocked, `move` becomes `lock`, drag the tracker to move it,
+With the tracker unlocked, the padlock stays lit, drag the tracker to move it,
 and use the mouse wheel to scale it. The current scale shows as a percentage,
 and right-click resets it to 100% without moving the tracker.
 
