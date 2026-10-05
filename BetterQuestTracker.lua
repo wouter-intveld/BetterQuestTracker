@@ -1220,7 +1220,7 @@ local function RegisterSettings()
 
     Checkbox("locked", "Lock position", "Unlock to drag the tracker and scale it with the mouse wheel.", Refresh)
     Checkbox("zoneFilter", "Only quests in current zone", "Hide quests that are not in your current zone.", RequestRender)
-    Checkbox("respectWatch", "Only quests checked in quest log", "Quests you uncheck in the quest log are hidden from the tracker.", RequestRender)
+    Checkbox("respectWatch", "Only checked in quest log", "Quests you uncheck in the quest log are hidden from the tracker.", RequestRender)
     Checkbox("skipHighLevel", "Don't track high-level quests", "Quests this many levels above you are unchecked in the quest log, on accept and when this option changes.", function()
         RetrackAllowed()
         UntrackHighLevelInLog()
