@@ -7,6 +7,7 @@ local DEFAULTS = {
     maxHeight = 500,
     locked = true,
     zoneFilter = true,     -- only show quests for the current zone
+    classQuests = true,    -- the zone filter keeps quests under your class header (they have no location)
     sortByDistance = true, -- nearest quest first
     completedLast = false, -- finished quests at the bottom of their zone
     respectWatch = true,   -- hide quests unchecked in the quest log
@@ -668,7 +669,9 @@ local function CollectQuests()
             elseif not info.isHidden and info.questID and info.questID > 0 then
                 local watched = not db.respectWatch or C_QuestLog.GetQuestWatchType(info.questID) ~= nil
                     or (db.skipHighLevel and db.showHighLevel and char.autoUntracked[info.questID])
+                -- Class quests sit under the class header and the client has no location for them.
                 local inZone = not db.zoneFilter or zoneNames[currentHeader] or C_QuestLog.IsOnMap(info.questID)
+                    or (db.classQuests and currentHeader == UnitClass("player"))
                 if watched and inZone then
                     info.bqtLogIndex = i
                     info.bqtHeader = currentHeader or "Other"
@@ -1220,6 +1223,7 @@ local function RegisterSettings()
 
     Checkbox("locked", "Lock position", "Unlock to drag the tracker and scale it with the mouse wheel.", Refresh)
     Checkbox("zoneFilter", "Only quests in current zone", "Hide quests that are not in your current zone.", RequestRender)
+    Checkbox("classQuests", "Always show class quests", "With the zone filter on, still show the quests under your class in the quest log. The game has no location for them.", RequestRender)
     Checkbox("respectWatch", "Only checked in quest log", "Quests you uncheck in the quest log are hidden from the tracker.", RequestRender)
     Checkbox("skipHighLevel", "Don't track high-level quests", "Quests this many levels above you are unchecked in the quest log, on accept and when this option changes.", function()
         RetrackAllowed()
