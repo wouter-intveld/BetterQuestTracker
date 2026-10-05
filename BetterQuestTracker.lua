@@ -116,7 +116,7 @@ TEXT.questCtrl = "Ctrl-click: " .. TEXT.openQuestLog
 TEXT.recipeLeft = "Left-click: " .. TEXT.openRecipe
 TEXT.recipeShift = "Shift-click: " .. TEXT.stopTracking
 TEXT.headerLeft = ("Quest left-click: %s / %s"):format(TEXT.setWaypoint, TEXT.removeWaypoint)
-TEXT.headerSettings = "/bqt: " .. TEXT.settings
+TEXT.headerSettings = "Left-click or /bqt: " .. TEXT.settings
 
 -- Tooltip lines: hints in grey, finished objectives in the list's green.
 local function AddHint(text) GameTooltip:AddLine(text, 0.5, 0.5, 0.5) end
@@ -297,6 +297,9 @@ header:SetScript("OnEnter", function(self)
     GameTooltip:AddLine(TEXT.headerRight, 1, 1, 1)
     GameTooltip:AddLine(TEXT.headerSettings, 1, 1, 1)
     GameTooltip:Show()
+end)
+header:SetScript("OnClick", function()
+    Settings.OpenToCategory(settingsCategory:GetID())
 end)
 header:SetScript("OnLeave", function()
     UpdateHeaderHover()
