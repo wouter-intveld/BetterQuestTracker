@@ -32,8 +32,7 @@ local shownHeader = {}
 local renderCount = 0
 local slowestRender, slowestReason, lastRender = 0, "none", 0
 local titleLines = {}
-local UpdateItemButtons
-local Render
+local UpdateItemButtons, Render, Refresh -- defined below, called from frame scripts set up above them
 local MAX_LINES = 150
 local HEADER_HEIGHT = 32
 local FOOTER_HEIGHT = 14
@@ -97,79 +96,6 @@ local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 title:SetPoint("BOTTOMLEFT")
 title:SetJustifyH("LEFT")
 
--- Header controls are small atlas icons in their own colours, dimmed until hovered.
-local ICON_SIZE, ICON_GAP, ICON_DIM = 14, 6, 0.6
-local function AddIcon(parent)
-    local t = parent:CreateTexture(nil, "OVERLAY")
-    t:SetAlpha(ICON_DIM)
-    return t
-end
-
-local modeIcon = AddIcon(header)
-modeIcon:SetSize(ICON_SIZE, ICON_SIZE)
-modeIcon:SetPoint("BOTTOMRIGHT", 0, -1)
-
--- Drawn from two thin bars so it matches the flat header text instead of a bulky stock button.
--- Sits outside the tracker, on its top-right corner.
-local collapseButton = CreateFrame("Button", nil, frame)
-collapseButton:SetSize(ICON_SIZE, ICON_SIZE)
-collapseButton:SetPoint("BOTTOMLEFT", frame, "TOPRIGHT")
-collapseButton.icon = AddIcon(collapseButton)
-collapseButton.icon:SetAllPoints()
-local function SetCollapseColor(c)
-    collapseButton.icon:SetAlpha(c)
-end
-collapseButton:SetScript("OnClick", function(self)
-    db.collapsed = not db.collapsed
-    Render()
-    self:GetScript("OnEnter")(self)
-end)
-collapseButton:SetScript("OnEnter", function(self)
-    SetCollapseColor(1)
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine(db.collapsed and "Expand" or "Collapse")
-    GameTooltip:Show()
-end)
-collapseButton:SetScript("OnLeave", function()
-    SetCollapseColor(ICON_DIM)
-    GameTooltip_Hide()
-end)
-
-local modeButton = CreateFrame("Button", nil, header)
-modeButton:SetAllPoints(modeIcon)
-modeButton:SetScript("OnClick", function(self)
-    db.zoneFilter = not db.zoneFilter
-    Render()
-    self:GetScript("OnEnter")(self)
-end)
-modeButton:SetScript("OnEnter", function(self)
-    modeIcon:SetAlpha(1)
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine("Zone filter")
-    GameTooltip:AddLine(db.zoneFilter and "Showing quests in your current zone" or "Showing all quests", 1, 1, 1)
-    GameTooltip:AddLine("Click: toggle", 0.5, 0.5, 0.5)
-    GameTooltip:Show()
-end)
-modeButton:SetScript("OnLeave", function()
-    modeIcon:SetAlpha(ICON_DIM)
-    GameTooltip_Hide()
-end)
-
-local levelButton = CreateFrame("Button", nil, header)
-levelButton:SetSize(ICON_SIZE, ICON_SIZE)
-levelButton:SetPoint("BOTTOMRIGHT", modeIcon, "BOTTOMLEFT", -ICON_GAP, 0)
-levelButton.icon = levelButton:CreateTexture(nil, "OVERLAY")
-levelButton.icon:SetAllPoints()
-levelButton.icon:SetAtlas("UI-HUD-UnitFrame-Target-HighLevelTarget_Icon")
-
--- +3 stays out of sight until the header is hovered, unless it is showing the
--- high-level quests; with the option off it stays hidden. Alpha rather than Hide
--- keeps its slot, so move never shifts.
-local function UpdateLevelAlpha()
-    local visible = db.skipHighLevel and (db.showHighLevel or header:IsMouseOver())
-    levelButton:SetAlpha(visible and 1 or 0)
-end
-
 local scroll = CreateFrame("ScrollFrame", nil, frame)
 scroll:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT)
 scroll:SetPoint("RIGHT")
@@ -193,24 +119,144 @@ moveOverlay.text = moveOverlay:CreateFontString(nil, "OVERLAY", "GameFontHighlig
 moveOverlay.text:SetPoint("TOP", 0, -HEADER_HEIGHT - 6)
 moveOverlay.text:SetJustifyH("CENTER")
 
--- Parented to the frame, not the header, so it stays clickable and undimmed above the move overlay.
-local lockButton = CreateFrame("Button", nil, frame)
-lockButton:SetSize(ICON_SIZE, ICON_SIZE)
-lockButton:SetPoint("BOTTOMRIGHT", levelButton, "BOTTOMLEFT", -ICON_GAP, 0)
-lockButton:SetFrameLevel(moveOverlay:GetFrameLevel() + 10)
-lockButton.icon = AddIcon(lockButton)
-lockButton.icon:SetAllPoints()
-lockButton.icon:SetAtlas("communities-icon-lock")
-
--- "move" (locked) only shows while hovering the header; "lock" (unlocked) always shows.
-local function UpdateLockLabel(hover)
-    lockButton.icon:SetAlpha((hover or not db.locked) and 1 or ICON_DIM)
-    lockButton:SetShown(not db.locked or header:IsMouseOver())
-end
-
 local moreText = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 moreText:SetPoint("BOTTOMRIGHT", -8, 3)
 moreText:SetText("scroll for more")
+
+---------------------------------------------------------------------------
+-- Header controls
+-- Small atlas icons in their own colours, dimmed until hovered. Right to left
+-- in the header: zone filter, +N (high-level quests), lock. The collapse
+-- toggle sits just outside the tracker, on its top-right corner.
+---------------------------------------------------------------------------
+local ICON_SIZE, ICON_GAP, ICON_DIM = 14, 6, 0.6
+
+local function IconButton(parent, atlas)
+    local b = CreateFrame("Button", nil, parent)
+    b:SetSize(ICON_SIZE, ICON_SIZE)
+    b.icon = b:CreateTexture(nil, "OVERLAY")
+    b.icon:SetAllPoints()
+    b.icon:SetAlpha(ICON_DIM)
+    if atlas then b.icon:SetAtlas(atlas) end
+    return b
+end
+
+local collapseButton = IconButton(frame) -- atlas follows db.collapsed, see UpdateHeader
+collapseButton:SetPoint("BOTTOMLEFT", frame, "TOPRIGHT")
+
+local modeButton = IconButton(header, "Map-Filter-Button")
+modeButton:SetPoint("BOTTOMRIGHT", 0, -1)
+
+local levelButton = IconButton(header, "UI-HUD-UnitFrame-Target-HighLevelTarget_Icon")
+levelButton:SetPoint("BOTTOMRIGHT", modeButton, "BOTTOMLEFT", -ICON_GAP, 0)
+
+-- Parented to the frame, not the header, so it stays clickable and undimmed
+-- above the move overlay.
+local lockButton = IconButton(frame, "communities-icon-lock")
+lockButton:SetPoint("BOTTOMRIGHT", levelButton, "BOTTOMLEFT", -ICON_GAP, 0)
+lockButton:SetFrameLevel(moveOverlay:GetFrameLevel() + 10)
+
+-- The lock and the +N stay out of sight until the header is hovered: the lock
+-- also shows while unlocked, the +N also while it is showing the high-level
+-- quests, and only with that option on at all. Alpha rather than Hide keeps the
+-- +N's slot, so the lock never shifts. Runs as the mouse enters or leaves the
+-- header or any control, because moving onto a control leaves the header.
+local function UpdateHeaderHover()
+    local hover = header:IsMouseOver()
+    lockButton:SetShown(hover or not db.locked)
+    lockButton.icon:SetAlpha((not db.locked or lockButton:IsMouseOver()) and 1 or ICON_DIM)
+    levelButton:SetAlpha(db.skipHighLevel and (db.showHighLevel or hover) and 1 or 0)
+end
+
+-- A control's click toggles a setting and redraws; its tooltip describes the
+-- state, so it is rebuilt after the click.
+local function SetupControl(button, onClick, tooltip)
+    local function OnEnter(self)
+        self.icon:SetAlpha(1)
+        UpdateHeaderHover()
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        tooltip()
+        GameTooltip:Show()
+    end
+    button:SetScript("OnEnter", OnEnter)
+    button:SetScript("OnLeave", function(self)
+        self.icon:SetAlpha(ICON_DIM)
+        UpdateHeaderHover()
+        GameTooltip_Hide()
+    end)
+    button:SetScript("OnClick", function(self)
+        onClick()
+        OnEnter(self)
+    end)
+end
+
+SetupControl(collapseButton, function()
+    db.collapsed = not db.collapsed
+    Render()
+end, function()
+    GameTooltip:AddLine(db.collapsed and "Expand" or "Collapse")
+end)
+
+SetupControl(modeButton, function()
+    db.zoneFilter = not db.zoneFilter
+    Render()
+end, function()
+    GameTooltip:AddLine("Zone filter")
+    GameTooltip:AddLine(db.zoneFilter and "Showing quests in your current zone" or "Showing all quests", 1, 1, 1)
+    GameTooltip:AddLine("Click: toggle", 0.5, 0.5, 0.5)
+end)
+
+SetupControl(levelButton, function()
+    db.showHighLevel = not db.showHighLevel
+    Render()
+end, function()
+    GameTooltip:AddLine("High-level quests")
+    local minLevel = UnitLevel("player") + db.skipLevelDiff
+    GameTooltip:AddLine(("Not tracking quests +%d levels above you (level %d and up)"):format(db.skipLevelDiff, minLevel),
+        1, 0.5, 0.25, true)
+    if db.showHighLevel then
+        GameTooltip:AddLine("Showing them in the tracker anyway", 0.7, 0.7, 0.7, true)
+    else
+        GameTooltip:AddLine("Hidden from the tracker", 1, 1, 1, true)
+    end
+    GameTooltip:AddLine("Click: show / hide them", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Turn off or change the threshold in /bqt settings", 0.5, 0.5, 0.5)
+end)
+
+SetupControl(lockButton, function()
+    db.locked = not db.locked
+    Refresh()
+end, function()
+    GameTooltip:AddLine(db.locked and "Locked" or "Unlocked")
+    GameTooltip:AddLine(db.locked and "Click to unlock: move and scale the tracker" or "Click to lock", 1, 1, 1)
+end)
+
+header:SetScript("OnEnter", function(self)
+    UpdateHeaderHover()
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine("BetterQuestTracker")
+    GameTooltip:AddLine("Quest left-click: set / remove waypoint", 1, 1, 1)
+    GameTooltip:AddLine("Quest right-click: quest options", 1, 1, 1)
+    GameTooltip:AddLine("/bqt: open settings", 1, 1, 1)
+    GameTooltip:Show()
+end)
+header:SetScript("OnLeave", function()
+    UpdateHeaderHover()
+    GameTooltip_Hide()
+end)
+
+-- Header state that follows the settings: the quest count and which icons are
+-- desaturated, hidden or lit.
+local function UpdateHeader(questCount)
+    title:SetText(("%s (%d)"):format(TEXT.quests, questCount))
+    collapseButton.icon:SetAtlas(db.collapsed and "UI-QuestTrackerButton-Expand-All"
+        or "UI-QuestTrackerButton-Collapse-All")
+    modeButton.icon:SetDesaturated(not db.zoneFilter)
+    levelButton.icon:SetDesaturated(db.showHighLevel)
+    -- The +N only works while the option is on; its slot stays either way.
+    levelButton:EnableMouse(db.skipHighLevel)
+    UpdateHeaderHover()
+end
 
 local function MaxScroll()
     return math.max(0, content:GetHeight() - scroll:GetHeight())
@@ -443,7 +489,7 @@ local function ApplyLayout()
     end
     PlaceFrame()
     moveOverlay:SetShown(not db.locked)
-    UpdateLockLabel(lockButton:IsVisible() and lockButton:IsMouseOver())
+    UpdateHeaderHover()
     scroll:SetAlpha(db.locked and 1 or 0.25)
     header:SetAlpha(db.locked and 1 or 0.25)
     moveOverlay.text:SetText(("Scale %d%%\n|cffaaaaaaDrag: move   Wheel: scale\nRight-click: reset scale|r"):format(db.scale * 100 + 0.5))
@@ -741,14 +787,7 @@ function Render(reason)
         shownOrder[i] = q.questID
         shownHeader[i] = q.bqtHeader
     end
-    title:SetText(("%s (%d)"):format(TEXT.quests, #quests))
-    levelButton.icon:SetDesaturated(db.showHighLevel)
-    -- The +3 only works while the option is on; its slot stays either way.
-    levelButton:EnableMouse(db.skipHighLevel)
-    UpdateLevelAlpha()
-    modeIcon:SetAtlas("Map-Filter-Button")
-    modeIcon:SetDesaturated(not db.zoneFilter)
-    collapseButton.icon:SetAtlas(db.collapsed and "UI-QuestTrackerButton-Expand-All" or "UI-QuestTrackerButton-Collapse-All")
+    UpdateHeader(#quests)
 
     local n, y = 0, 0
     local textWidth = db.width - 16
@@ -988,37 +1027,10 @@ local function PrintPerf()
     end
 end
 
-local function Refresh()
+function Refresh()
     ApplyLayout()
     RequestRender()
 end
-
-lockButton:SetScript("OnClick", function(self)
-    db.locked = not db.locked
-    Refresh()
-    self:GetScript("OnEnter")(self)
-end)
-lockButton:SetScript("OnEnter", function(self)
-    UpdateLockLabel(true)
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine(db.locked and "Locked" or "Unlocked")
-    GameTooltip:AddLine(db.locked and "Click to unlock: move and scale the tracker" or "Click to lock", 1, 1, 1)
-    GameTooltip:Show()
-end)
-lockButton:SetScript("OnLeave", function()
-    UpdateLockLabel(false)
-    GameTooltip_Hide()
-end)
-
-header:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine("BetterQuestTracker")
-    GameTooltip:AddLine("Quest left-click: set / remove waypoint", 1, 1, 1)
-    GameTooltip:AddLine("Quest right-click: quest options", 1, 1, 1)
-    GameTooltip:AddLine("/bqt: open settings", 1, 1, 1)
-    GameTooltip:Show()
-end)
-header:SetScript("OnLeave", GameTooltip_Hide)
 
 ---------------------------------------------------------------------------
 -- Blizzard tracker
@@ -1046,7 +1058,10 @@ local function UpdateBlizzardTracker()
 end
 
 ---------------------------------------------------------------------------
--- Settings panel (Options > AddOns)
+-- High-level quests
+-- With skipHighLevel on, quests skipLevelDiff or more levels above the player
+-- are unchecked in the quest log and remembered in char.autoUntracked, so they
+-- can be checked again on level-up or when the option goes off.
 ---------------------------------------------------------------------------
 local function UntrackIfTooHigh(questID)
     local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
@@ -1084,39 +1099,9 @@ local function UntrackHighLevelInLog()
     end
 end
 
-levelButton:SetScript("OnClick", function(self)
-    db.showHighLevel = not db.showHighLevel
-    Render()
-    self:GetScript("OnEnter")(self)
-end)
-levelButton:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine("High-level quests")
-    local minLevel = UnitLevel("player") + db.skipLevelDiff
-    GameTooltip:AddLine(("Not tracking quests +%d levels above you (level %d and up)"):format(db.skipLevelDiff, minLevel), 1, 0.5, 0.25, true)
-    if db.showHighLevel then
-        GameTooltip:AddLine("Showing them in the tracker anyway", 0.7, 0.7, 0.7, true)
-    else
-        GameTooltip:AddLine("Hidden from the tracker", 1, 1, 1, true)
-    end
-    GameTooltip:AddLine("Click: show / hide them", 0.5, 0.5, 0.5)
-    GameTooltip:AddLine("Turn off or change the threshold in /bqt settings", 0.5, 0.5, 0.5)
-    GameTooltip:Show()
-end)
-levelButton:SetScript("OnLeave", GameTooltip_Hide)
-
--- Show/hide the "move" label as the mouse enters or leaves the header area,
--- including when it leaves via one of the header's own buttons.
--- Must run after every SetScript on these frames, which would drop the hooks.
-local function OnHeaderHoverChanged()
-    UpdateLockLabel(lockButton:IsVisible() and lockButton:IsMouseOver())
-    UpdateLevelAlpha()
-end
-for _, f in ipairs({ header, levelButton, modeButton, collapseButton }) do
-    f:HookScript("OnEnter", OnHeaderHoverChanged)
-    f:HookScript("OnLeave", OnHeaderHoverChanged)
-end
-
+---------------------------------------------------------------------------
+-- Settings panel (Options > AddOns)
+---------------------------------------------------------------------------
 local function RegisterSettings()
     local category = Settings.RegisterVerticalLayoutCategory("|cff33ff99Better|rQuestTracker")
 
