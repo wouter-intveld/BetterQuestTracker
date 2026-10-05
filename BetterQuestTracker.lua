@@ -92,7 +92,6 @@ divider:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)
 divider:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -4)
 divider:SetHeight(1)
 divider:SetColorTexture(1, 0.82, 0, 0.35)
-header:RegisterForDrag("LeftButton")
 
 local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 title:SetPoint("BOTTOMLEFT")
@@ -443,7 +442,6 @@ local function ApplyLayout()
         SavePosition()
     end
     PlaceFrame()
-    frame:EnableMouse(not db.locked)
     moveOverlay:SetShown(not db.locked)
     UpdateLockLabel(lockButton:IsVisible() and lockButton:IsMouseOver())
     scroll:SetAlpha(db.locked and 1 or 0.25)
@@ -459,9 +457,9 @@ local function ApplyLayout()
     UpdateItemButtons()
 end
 
--- Dragging works from the header always and from the whole frame when unlocked.
+-- Moving and scaling go through the move overlay, which covers the tracker
+-- while it is unlocked; only the lock button sits above it.
 local function StartMove()
-    if db.locked then return end
     frame.isMoving = true
     UpdateItemButtons()
     frame:StartMoving()
@@ -474,12 +472,6 @@ local function StopMove()
     PlaceFrame()
     UpdateItemButtons()
 end
-frame:RegisterForDrag("LeftButton")
-frame:SetScript("OnDragStart", StartMove)
-frame:SetScript("OnDragStop", StopMove)
-header:SetScript("OnDragStart", StartMove)
-header:SetScript("OnDragStop", StopMove)
-
 -- Mouse wheel: scales while unlocked, scrolls the list while locked.
 local function OnMouseWheel(_, delta)
     if not db.locked then
