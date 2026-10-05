@@ -14,7 +14,8 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
 - Shows quests for your current zone, grouped under the zone headers from your
   quest log. Click `zone` in the header to switch to `all` and back.
 - Sorts quests by distance, nearest first. The tracker checks every 2 seconds
-  and only redraws when the order changes.
+  and only redraws when the order changes. Optionally, quests that are ready
+  to turn in move to the bottom of their zone (off by default).
 - Follows the checkboxes in the quest log. Uncheck a quest there and it leaves
   the tracker.
 - Optionally unchecks newly accepted quests that are 3 or more levels above

@@ -8,6 +8,7 @@ local DEFAULTS = {
     locked = true,
     zoneFilter = true,     -- only show quests for the current zone
     sortByDistance = true, -- nearest quest first
+    completedLast = false, -- finished quests at the bottom of their zone
     respectWatch = true,   -- hide quests unchecked in the quest log
     skipHighLevel = false, -- don't auto-track newly accepted high-level quests
     showHighLevel = false, -- still list the quests skipHighLevel untracked (the +3 header toggle)
@@ -293,13 +294,18 @@ local function OnRecipeClick(line, button)
 end
 
 local lines = {}
+local BULLET_WIDTH = 8
+
 local function GetLine(i)
     local line = lines[i]
     if line then return line end
     line = CreateFrame("Button", nil, content)
     line:SetHeight(14)
     line.text = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    line.text:SetAllPoints()
+    line.text:SetPoint("BOTTOMRIGHT")
+    -- "- " sits in its own column so wrapped objective text lines up under the text.
+    line.bullet = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    line.bullet:SetPoint("TOPLEFT")
     line.text:SetJustifyH("LEFT")
     line.text:SetWordWrap(true)
     line:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
@@ -501,6 +507,7 @@ end
 local function ByGroup(a, b)
     local ra, rb = groupRank[a.bqtHeader], groupRank[b.bqtHeader]
     if ra ~= rb then return ra < rb end
+    if a.bqtDone ~= b.bqtDone then return b.bqtDone end
     return a.bqtIndex < b.bqtIndex
 end
 
@@ -522,6 +529,7 @@ end
 ---@field bqtHeader string
 ---@field bqtDistance number
 ---@field bqtIndex number
+---@field bqtDone boolean
 
 local function CollectQuests()
     wipe(zoneNames)
@@ -555,6 +563,7 @@ local function CollectQuests()
     local rank = 0
     for i, q in ipairs(quests) do
         q.bqtIndex = i
+        q.bqtDone = db.completedLast and C_QuestLog.IsComplete(q.questID) or false
         if not groupRank[q.bqtHeader] then
             rank = rank + 1
             groupRank[q.bqtHeader] = rank
@@ -752,9 +761,13 @@ function Render(reason)
         line.recipeID, line.recipeName = recipeID, recipeName
         if line.lastText ~= text or line.lastWidth ~= width then
             line.lastText, line.lastWidth = text, width
+            local color, rest = text:match("^(|c%x%x%x%x%x%x%x%x)%- (.*)$")
+            local inset = color and BULLET_WIDTH or 0
+            line.bullet:SetText(color and color .. "-|r" or "")
+            line.text:SetPoint("TOPLEFT", inset, 0)
             line:SetWidth(width)
-            line.text:SetWidth(width)
-            line.text:SetText(text)
+            line.text:SetWidth(width - inset)
+            line.text:SetText(color and color .. rest or text)
             line.lastHeight = math.max(14, line.text:GetStringHeight())
             line:SetHeight(line.lastHeight)
         end
@@ -923,23 +936,30 @@ local function ZoneNamesChanged()
 end
 
 local function ShownOrderIsStale()
-    local previous, previousGroupFirst, lastHeader = -1, -1, nil
+    -- Zones are ordered by their nearest quest; within a zone quests run nearest
+    -- first, and with completedLast the finished ones start a second run.
+    local previous, previousGroupMin, groupMin, lastHeader, lastDone = -1, -1, nil, nil, false
     for i, questID in ipairs(shownOrder) do
         local h = shownHeader[i]
         if not db.collapsedZones[h] then
             local distSq, onContinent = C_QuestLog.GetDistanceSqToQuest(questID)
             local d = (distSq and onContinent) and distSq or math.huge
+            local done = db.completedLast and C_QuestLog.IsComplete(questID)
             if h ~= lastHeader then
-                if d < previousGroupFirst then return true end
-                previousGroupFirst = d
-                lastHeader = h
-            elseif d < previous then
-                return true
+                if groupMin then
+                    if groupMin < previousGroupMin then return true end
+                    previousGroupMin = groupMin
+                end
+                groupMin, lastHeader, lastDone, previous = d, h, false, -1
+            else
+                if done ~= lastDone then previous = -1 end
+                if d < groupMin then groupMin = d end
             end
-            previous = d
+            if d < previous then return true end
+            previous, lastDone = d, done
         end
     end
-    return false
+    return groupMin ~= nil and groupMin < previousGroupMin
 end
 
 local function OnSortTick()
@@ -1138,6 +1158,7 @@ local function RegisterSettings()
         end, "+%d")
     Checkbox("quiet", "Mute chat messages", "Don't print automatic messages, like quests being (un)tracked.", function() end)
     Checkbox("sortByDistance", "Sort by distance", "Show the nearest quest first.", RequestRender)
+    Checkbox("completedLast", "Finished quests last", "Move quests that are ready to turn in to the bottom of their zone.", RequestRender)
     Checkbox("showRecipes", "Show tracked recipes", "List recipes tracked in the profession window below your quests, with the reagents you carry.", RequestRender)
     Slider("scale", "Scale", "Size of the tracker.", 0.5, 2.5, 0.05,
         SetScaleKeepingPosition, "%.2f")
