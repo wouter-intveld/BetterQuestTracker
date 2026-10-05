@@ -472,7 +472,9 @@ local function StopMove()
     PlaceFrame()
     UpdateItemButtons()
 end
--- Mouse wheel: scales while unlocked, scrolls the list while locked.
+-- Mouse wheel: scales while unlocked (through the overlay), scrolls the list
+-- while locked. Render enables the frame's wheel only when the list is taller
+-- than maxHeight, so over a short tracker the wheel still reaches the camera.
 local function OnMouseWheel(_, delta)
     if not db.locked then
         SetScaleKeepingPosition(math.min(2.5, math.max(0.5, db.scale + delta * 0.05)))
@@ -482,9 +484,7 @@ local function OnMouseWheel(_, delta)
     local target = scroll:GetVerticalScroll() - delta * SCROLL_STEP
     scroll:SetVerticalScroll(math.min(MaxScroll(), math.max(0, target)))
 end
-frame:EnableMouseWheel(true)
 frame:SetScript("OnMouseWheel", OnMouseWheel)
-scroll:SetScript("OnMouseWheel", OnMouseWheel)
 
 moveOverlay:SetScript("OnDragStart", StartMove)
 moveOverlay:SetScript("OnDragStop", StopMove)
@@ -867,7 +867,7 @@ function Render(reason)
     content:SetHeight(contentHeight)
     scroll:SetHeight(math.max(1, visible))
     scroll:SetShown(not db.collapsed)
-    scroll:EnableMouseWheel(scrollable or not db.locked)
+    frame:EnableMouseWheel(scrollable)
     scroll:SetVerticalScroll(math.min(scroll:GetVerticalScroll(), MaxScroll()))
 
     local height = HEADER_HEIGHT + visible + (scrollable and FOOTER_HEIGHT or 4)
