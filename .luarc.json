@@ -20,6 +20,11 @@
     "DurabilityFrame",
     "QuestMapQuestOptions_AbandonQuest",
     "ChatEdit_GetActiveWindow",
-    "ChatEdit_InsertLink"
+    "ChatEdit_InsertLink",
+    "GetQuestTimers",
+    "GetQuestIndexForTimer",
+    "GetQuestLogTimeLeft",
+    "SelectQuestLogEntry",
+    "GetQuestLogSelection"
   ]
 }

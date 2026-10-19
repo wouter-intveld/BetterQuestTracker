@@ -25,6 +25,8 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
   addon checks those quests again. While the option is on, the skull icon in
   the header shows or hides those quests in the tracker; it turns grey while
   they show.
+- Shows the time remaining under timed quests, counting down every second.
+  The timer stays visible when you collapse the quest's objectives.
 - Adds a button left of each quest that has a usable quest item. The button
   shows the item's cooldown and charges.
 - Shows a tooltip on hover with the quest text, objective progress, and the
@@ -107,6 +109,7 @@ until combat ends and then realign. They still work during combat.
 ## Performance
 
 The addon has no `OnUpdate` handlers. Quest log events are batched into one
-redraw per 0.25 seconds. Memory sits around 100 to 250 KB after garbage
+redraw per 0.25 seconds. While a quest timer is on screen, a 1-second ticker
+updates only the timer text. Memory sits around 100 to 250 KB after garbage
 collection; the number in `/bqt perf` climbs between collections because the
 quest log API returns new tables on every call.

@@ -108,6 +108,7 @@ local TEXT = {
     overlay = "Scale %d%%\n|cffaaaaaaDrag: move   Wheel: scale\nRight-click: reset scale|r",
     noQuestsZone = "No quests for this zone",
     noQuests = "No quests",
+    timeLeft = L("TIME_REMAINING", "Time Remaining:"),
 }
 -- Mouse hints name the same actions as the context menus, in the menus' words.
 TEXT.questLeft = ("Left-click: %s / %s"):format(TEXT.setWaypoint, TEXT.removeWaypoint)
@@ -926,6 +927,71 @@ local function AddSectionHeader(name, collapsedCount)
     AddLine(text, 0).zone = name
 end
 
+-- Timed quests: each countdown line drawn by the last redraw, mapped to the
+-- GetTime() its quest runs out. A 1-second ticker runs only while one shows.
+local timerLines = {}
+local timerTicker
+
+local function TimerText(expires)
+    local seconds = math.max(0, math.ceil(expires - GetTime()))
+    return ("%s%s %s|r"):format(COLOR.objective, TEXT.timeLeft, SecondsToClock(seconds))
+end
+
+-- Only the text changes; it is set the way AddLine would, so its cache stays valid.
+local function UpdateTimers()
+    -- Nothing to see while hidden or collapsed; the next tick after showing catches up.
+    if db.collapsed or not frame:IsVisible() then return end
+    for line, expires in pairs(timerLines) do
+        local text = TimerText(expires)
+        if line.lastText ~= text then
+            line.lastText = text
+            line.text:SetText(text)
+        end
+    end
+end
+
+local function UpdateTimerTicker()
+    local wanted = next(timerLines) ~= nil
+    if wanted and not timerTicker then
+        timerTicker = C_Timer.NewTicker(1, UpdateTimers)
+    elseif not wanted and timerTicker then
+        timerTicker:Cancel()
+        timerTicker = nil
+    end
+end
+
+-- Same rule as Blizzard's tracker: a running timer on a quest that isn't complete yet.
+-- Classic clients leave GetTimeAllowed empty and report running timers through
+-- GetQuestTimers, one seconds-left value per timer, matched to a log index.
+local function SecondsLeft(questID, logIndex)
+    local total, elapsed = C_QuestLog.GetTimeAllowed(questID)
+    if total and elapsed and elapsed < total then return total - elapsed end
+    if not logIndex then return end
+    if GetQuestTimers then
+        local timers = { GetQuestTimers() }
+        for i, seconds in ipairs(timers) do
+            if GetQuestIndexForTimer(i) == logIndex and seconds > 0 then return seconds end
+        end
+    end
+    -- What the quest log's own "Time Remaining" reads; it needs the entry selected.
+    if GetQuestLogTimeLeft and SelectQuestLogEntry then
+        local selected = GetQuestLogSelection and GetQuestLogSelection()
+        SelectQuestLogEntry(logIndex)
+        local seconds = GetQuestLogTimeLeft()
+        if selected then SelectQuestLogEntry(selected) end
+        if seconds and seconds > 0 then return seconds end
+    end
+end
+
+local function AddTimer(questID, logIndex)
+    local left = SecondsLeft(questID, logIndex)
+    if not left then return end
+    local expires = GetTime() + left
+    local line = AddLine(TimerText(expires), INDENT, COLOR.objective)
+    line.questID = questID
+    timerLines[line] = expires
+end
+
 local function RenderQuest(q, trackedID)
     local questCollapsed = char.collapsedQuests[q.questID]
     local complete = C_QuestLog.IsComplete(q.questID)
@@ -936,6 +1002,9 @@ local function RenderQuest(q, trackedID)
     local line = AddLine(text, 0)
     line.questID, line.logIndex = q.questID, q.bqtLogIndex
     titleLines[#titleLines + 1] = line
+    -- The timer stays visible on a collapsed quest: it is what you can't afford to miss.
+    -- Delivery quests are complete from the start yet still run out, so the timer shows either way.
+    AddTimer(q.questID, q.bqtLogIndex)
     if not questCollapsed then
         if complete then
             AddLine(COLOR.done .. TEXT.ready .. "|r", INDENT, COLOR.done).questID = q.questID
@@ -1026,6 +1095,7 @@ function Render(reason)
 
     layout.n, layout.y, layout.width = 0, 0, db.width - 16
     wipe(titleLines)
+    wipe(timerLines)
     local recipes = db.showRecipes and C_TradeSkillUI.GetRecipesTracked(false) or {}
     recipesTracked = #recipes
     if not db.collapsed then
@@ -1035,6 +1105,7 @@ function Render(reason)
     for i = layout.n + 1, #lines do lines[i]:Hide() end
     FitFrame()
     UpdateItemButtons()
+    UpdateTimerTicker()
 
     lastRender = debugprofilestop() - startTime
     if lastRender > slowestRender then
