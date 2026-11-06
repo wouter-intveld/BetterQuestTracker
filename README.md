@@ -25,6 +25,9 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
   addon checks those quests again. While the option is on, the skull icon in
   the header shows or hides those quests in the tracker; it turns grey while
   they show.
+- Optionally accepts quests as soon as the quest giver offers them, and turns
+  in finished ones, always or only while you hold Shift, Alt or Ctrl. Turn-in
+  stops when you have to pick a reward. Both are off by default.
 - Shows the time remaining under timed quests, counting down every second.
   The timer stays visible when you collapse the quest's objectives.
 - Adds a button left of each quest that has a usable quest item. The button

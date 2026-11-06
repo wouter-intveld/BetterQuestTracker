@@ -16,6 +16,9 @@ local DEFAULTS = {
     skipLevelDiff = 3,
     quiet = false,         -- mute automatic chat messages
     showRecipes = true,    -- list recipes tracked in the profession window
+    autoAccept = false,    -- accept quests as soon as the quest giver offers them
+    autoTurnIn = false,    -- complete finished quests at the quest giver (not when a reward must be picked)
+    autoAcceptKey = "none", -- auto accept/turn-in need this key held: "none", "shift", "alt", "ctrl"
     collapsed = false,
     collapsedZones = {},
 }
@@ -1314,6 +1317,18 @@ local function RegisterSettings()
     Checkbox("sortByDistance", "Sort by distance", "Show the nearest quest first.", RequestRender)
     Checkbox("completedLast", "Finished quests last", "Move quests that are ready to turn in to the bottom of their zone.", RequestRender)
     Checkbox("showRecipes", "Show tracked recipes", "List recipes tracked in the profession window below your quests, with the reagents you carry.", RequestRender)
+    Checkbox("autoAccept", "Auto-accept quests", "Accept a quest as soon as the quest giver offers it.", function() end)
+    Checkbox("autoTurnIn", "Auto turn-in quests", "Complete finished quests at the quest giver. Stops when you have to pick a reward.", function() end)
+    local keySetting = Proxy("autoAcceptKey", Settings.VarType.String, "Auto accept/turn-in key",
+        function(value) db.autoAcceptKey = value end)
+    Settings.CreateDropdown(category, keySetting, function()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("none", "No key needed")
+        container:Add("shift", "Shift")
+        container:Add("alt", "Alt")
+        container:Add("ctrl", "Ctrl")
+        return container:GetData()
+    end, "Only auto-accept and auto turn-in while this key is held when you talk to the quest giver.")
     Slider("scale", "Scale", "Size of the tracker.", SetScaleKeepingPosition, "%.2f")
     Slider("width", "Width", "Width of the tracker in pixels.", function(value) db.width = value end, "%d")
     Slider("maxHeight", "Maximum height", "Taller lists scroll with the mouse wheel.",
@@ -1419,6 +1434,29 @@ function EVENTS.QUEST_REMOVED(event, questID)
     char.collapsedQuests[questID] = nil
     char.autoUntracked[questID] = nil
     RequestRender(event)
+end
+
+local AUTO_ACCEPT_KEY = { shift = IsShiftKeyDown, alt = IsAltKeyDown, ctrl = IsControlKeyDown }
+
+local function AutoKeyHeld()
+    local held = AUTO_ACCEPT_KEY[db.autoAcceptKey]
+    return not held or held()
+end
+
+function EVENTS.QUEST_DETAIL()
+    if db.autoAccept and AutoKeyHeld() then AcceptQuest() end
+end
+
+-- The "progress" page: Continue only when everything is handed in.
+function EVENTS.QUEST_PROGRESS()
+    if db.autoTurnIn and IsQuestCompletable() and AutoKeyHeld() then CompleteQuest() end
+end
+
+-- The reward page: with a reward to choose, the choice stays with the player.
+function EVENTS.QUEST_COMPLETE()
+    if not (db.autoTurnIn and AutoKeyHeld()) then return end
+    local choices = GetNumQuestChoices()
+    if choices <= 1 then GetQuestReward(choices) end
 end
 
 function EVENTS.QUEST_WATCH_LIST_CHANGED(event, questID, added)
