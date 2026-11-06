@@ -1270,7 +1270,9 @@ end
 -- Settings panel (Options > AddOns)
 ---------------------------------------------------------------------------
 local function RegisterSettings()
-    local category = Settings.RegisterVerticalLayoutCategory(BRAND)
+    local main = Settings.RegisterVerticalLayoutCategory(BRAND)
+    -- The page the helpers below add to; switched for each subpage.
+    local category = main
 
     local function Proxy(key, varType, name, setter)
         return Settings.RegisterProxySetting(category, "BQT_" .. key, varType, name, DEFAULTS[key],
@@ -1299,6 +1301,13 @@ local function RegisterSettings()
     end
 
     Checkbox("locked", "Lock position", "Unlock to drag the tracker and scale it with the mouse wheel.", Refresh)
+    Checkbox("quiet", "Mute chat messages", "Don't print automatic messages, like quests being (un)tracked.", function() end)
+    Slider("scale", "Scale", "Size of the tracker.", SetScaleKeepingPosition, "%.2f")
+    Slider("width", "Width", "Width of the tracker in pixels.", function(value) db.width = value end, "%d")
+    Slider("maxHeight", "Maximum height", "Taller lists scroll with the mouse wheel.",
+        function(value) db.maxHeight = value end, "%d")
+
+    category = Settings.RegisterVerticalLayoutSubcategory(main, "Quests")
     Checkbox("zoneFilter", "Only quests in current zone", "Hide quests that are not in your current zone.", RequestRender)
     Checkbox("classQuests", "Always show class quests", "With the zone filter on, still show the quests under your class in the quest log. The game has no location for them.", RequestRender)
     Checkbox("respectWatch", "Only checked in quest log", "Quests you uncheck in the quest log are hidden from the tracker.", RequestRender)
@@ -1313,10 +1322,11 @@ local function RegisterSettings()
             RetrackAllowed()
             UntrackHighLevelInLog()
         end, "+%d")
-    Checkbox("quiet", "Mute chat messages", "Don't print automatic messages, like quests being (un)tracked.", function() end)
     Checkbox("sortByDistance", "Sort by distance", "Show the nearest quest first.", RequestRender)
     Checkbox("completedLast", "Finished quests last", "Move quests that are ready to turn in to the bottom of their zone.", RequestRender)
     Checkbox("showRecipes", "Show tracked recipes", "List recipes tracked in the profession window below your quests, with the reagents you carry.", RequestRender)
+
+    category = Settings.RegisterVerticalLayoutSubcategory(main, "Automation")
     Checkbox("autoAccept", "Auto-accept quests", "Accept a quest as soon as the quest giver offers it.", function() end)
     Checkbox("autoTurnIn", "Auto turn-in quests", "Complete finished quests at the quest giver. Stops when you have to pick a reward.", function() end)
     local keySetting = Proxy("autoAcceptKey", Settings.VarType.String, "Auto accept/turn-in key",
@@ -1329,13 +1339,9 @@ local function RegisterSettings()
         container:Add("ctrl", "Ctrl")
         return container:GetData()
     end, "Only auto-accept and auto turn-in while this key is held when you talk to the quest giver.")
-    Slider("scale", "Scale", "Size of the tracker.", SetScaleKeepingPosition, "%.2f")
-    Slider("width", "Width", "Width of the tracker in pixels.", function(value) db.width = value end, "%d")
-    Slider("maxHeight", "Maximum height", "Taller lists scroll with the mouse wheel.",
-        function(value) db.maxHeight = value end, "%d")
 
-    Settings.RegisterAddOnCategory(category)
-    settingsCategory = category
+    Settings.RegisterAddOnCategory(main)
+    settingsCategory = main
 end
 
 ---------------------------------------------------------------------------
@@ -1445,6 +1451,36 @@ end
 
 function EVENTS.QUEST_DETAIL()
     if db.autoAccept and AutoKeyHeld() then AcceptQuest() end
+end
+
+-- Most quest givers open a list first. Pick a quest from it: a finished one to turn in,
+-- else a new one; the quest pages that follow are handled above and below.
+function EVENTS.GOSSIP_SHOW()
+    if not AutoKeyHeld() then return end
+    if db.autoTurnIn then
+        for _, quest in ipairs(C_GossipInfo.GetActiveQuests()) do
+            if quest.isComplete then return C_GossipInfo.SelectActiveQuest(quest.questID) end
+        end
+    end
+    if db.autoAccept then
+        local quest = C_GossipInfo.GetAvailableQuests()[1]
+        if quest then C_GossipInfo.SelectAvailableQuest(quest.questID) end
+    end
+end
+
+-- The same list on quest givers without gossip.
+function EVENTS.QUEST_GREETING()
+    if not AutoKeyHeld() then return end
+    if db.autoTurnIn then
+        for i = 1, GetNumActiveQuests() do
+            local _, isComplete = GetActiveTitle(i)
+            -- The language server's stub omits the index these greeting-list calls take.
+            ---@diagnostic disable-next-line: redundant-parameter
+            if isComplete then return SelectActiveQuest(i) end
+        end
+    end
+    ---@diagnostic disable-next-line: redundant-parameter
+    if db.autoAccept and GetNumAvailableQuests() > 0 then SelectAvailableQuest(1) end
 end
 
 -- The "progress" page: Continue only when everything is handed in.
