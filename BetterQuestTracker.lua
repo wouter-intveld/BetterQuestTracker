@@ -39,7 +39,7 @@ local HEADER_HEIGHT = 32
 local FOOTER_HEIGHT = 14
 local SCROLL_STEP = 40
 
-local BRAND = "|cff33ff99Better|rQuestTracker"
+local BRAND = "|cffcda552Better|rQuestTracker"
 
 -- Escape codes for the list. Tooltips draw finished lines in the same green as 0.13, 1, 0.13.
 local COLOR = {
