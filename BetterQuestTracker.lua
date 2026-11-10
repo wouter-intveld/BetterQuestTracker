@@ -37,7 +37,7 @@ local settingsCategory
 local renderCount = 0
 local slowestRender, slowestReason, lastRender = 0, "none", 0
 local titleLines = {}
-local UpdateItemButtons, Render, Refresh -- defined below, called from frame scripts set up above them
+local UpdateItemButtons, Render, Refresh, UpdateSortTicker -- defined below, called from code set up above them
 local UpdateVisibility, UpdateInstanceCollapse -- defined below, used by the settings panel
 local HEADER_HEIGHT = 32
 local FOOTER_HEIGHT = 14
@@ -891,6 +891,7 @@ end
 
 local zoneCounts = {}
 local recipesTracked = 0 -- recipes shown in the last redraw; bag changes only matter then
+local awaitedReagents = {} -- reagent itemIDs the last redraw drew as "...", their names not loaded yet
 
 -- Cursor of the redraw in progress: lines used so far, the y offset of the next
 -- line (negative, down from the top of the content) and the text width.
@@ -960,7 +961,7 @@ local function UpdateTimers()
 end
 
 local function UpdateTimerTicker()
-    local wanted = next(timerLines) ~= nil
+    local wanted = next(timerLines) ~= nil and not db.hidden
     if wanted and not timerTicker then
         timerTicker = C_Timer.NewTicker(1, UpdateTimers)
     elseif not wanted and timerTicker then
@@ -971,17 +972,28 @@ end
 
 -- Same rule as Blizzard's tracker: a running timer on a quest that isn't complete yet.
 -- Classic clients leave GetTimeAllowed empty and report running timers through
--- GetQuestTimers, one seconds-left value per timer, matched to a log index.
+-- GetQuestTimers, one seconds-left value per timer, matched to a log index: read
+-- once per redraw. A quest that reported no timer is remembered, since a timer
+-- only ever starts at accept, so the probe below doesn't repeat every redraw.
+local timerByIndex = {} -- log index -> seconds left, as of this redraw
+local noTimer = {}      -- questID -> true: probed, none running
+
+local function ReadQuestTimers()
+    wipe(timerByIndex)
+    if not GetQuestTimers then return end
+    local timers = { GetQuestTimers() }
+    for i, seconds in ipairs(timers) do
+        local logIndex = GetQuestIndexForTimer(i)
+        if logIndex and seconds > 0 then timerByIndex[logIndex] = seconds end
+    end
+end
+
 local function SecondsLeft(questID, logIndex)
     local total, elapsed = C_QuestLog.GetTimeAllowed(questID)
     if total and elapsed and elapsed < total then return total - elapsed end
     if not logIndex then return end
-    if GetQuestTimers then
-        local timers = { GetQuestTimers() }
-        for i, seconds in ipairs(timers) do
-            if GetQuestIndexForTimer(i) == logIndex and seconds > 0 then return seconds end
-        end
-    end
+    if timerByIndex[logIndex] then return timerByIndex[logIndex] end
+    if noTimer[questID] then return end
     -- What the quest log's own "Time Remaining" reads; it needs the entry selected.
     if GetQuestLogTimeLeft and SelectQuestLogEntry then
         local selected = GetQuestLogSelection and GetQuestLogSelection()
@@ -990,6 +1002,7 @@ local function SecondsLeft(questID, logIndex)
         if selected then SelectQuestLogEntry(selected) end
         if seconds and seconds > 0 then return seconds end
     end
+    noTimer[questID] = true
 end
 
 local function AddTimer(questID, logIndex)
@@ -1067,7 +1080,10 @@ local function RenderRecipes(recipes)
             if slot.reagentType == Enum.CraftingReagentType.Basic and reagent and reagent.itemID then
                 local have = C_Item.GetItemCount(reagent.itemID)
                 local c = have >= slot.quantityRequired and COLOR.done or COLOR.objective
-                local itemName = C_Item.GetItemNameByID(reagent.itemID) or "..."
+                local itemName = C_Item.GetItemNameByID(reagent.itemID)
+                if not itemName then
+                    itemName, awaitedReagents[reagent.itemID] = "...", true
+                end
                 line = AddLine(("%s%s %d/%d|r"):format(c, itemName, have, slot.quantityRequired), INDENT, c)
                 line.recipeID, line.recipeName = recipeID, name
             end
@@ -1095,7 +1111,14 @@ local function FitFrame()
     if AvoidOffset() ~= frame.avoidOffset then PlaceFrame() end
 end
 
+local staleWhileHidden = false -- a redraw was asked for while hidden; drawn as it shows
+
 function Render(reason)
+    if db.hidden then
+        staleWhileHidden = true
+        return
+    end
+    staleWhileHidden = false
     local startTime = debugprofilestop()
     renderCount = renderCount + 1
     local quests = CollectQuests()
@@ -1105,9 +1128,11 @@ function Render(reason)
     layout.n, layout.y, layout.width = 0, 0, db.width - 16
     wipe(titleLines)
     wipe(timerLines)
+    wipe(awaitedReagents)
     local recipes = db.showRecipes and C_TradeSkillUI.GetRecipesTracked(false) or {}
     recipesTracked = #recipes
     if not db.collapsed then
+        ReadQuestTimers()
         RenderQuests(quests)
         RenderRecipes(recipes)
     end
@@ -1115,6 +1140,7 @@ function Render(reason)
     FitFrame()
     UpdateItemButtons()
     UpdateTimerTicker()
+    UpdateSortTicker()
 
     lastRender = debugprofilestop() - startTime
     if lastRender > slowestRender then
@@ -1177,8 +1203,21 @@ local function ZoneNamesChanged()
 end
 
 local function OnSortTick()
-    if not db.sortByDistance or db.collapsed or not frame:IsVisible() then return end
+    if not frame:IsVisible() then return end
     if ShownOrderIsStale() then RequestRender("distance sort") end
+end
+
+-- Distance changes as you walk; only redraw when the nearest-first order breaks.
+-- The 2-second check runs only while a nearest-first list is on screen.
+local sortTicker
+function UpdateSortTicker()
+    local wanted = db.sortByDistance and not db.collapsed and not db.hidden
+    if wanted and not sortTicker then
+        sortTicker = C_Timer.NewTicker(2, OnSortTick)
+    elseif not wanted and sortTicker then
+        sortTicker:Cancel()
+        sortTicker = nil
+    end
 end
 
 local function PrintPerf()
@@ -1300,6 +1339,7 @@ end
 
 function UpdateVisibility()
     frame:SetShown(not db.hidden)
+    if not db.hidden and staleWhileHidden then Render("shown") end
     local wanted = db.visibility == "mouseover" and not db.hidden
     if wanted and not fadeTicker then
         fadeTicker = C_Timer.NewTicker(0.1, UpdateFade)
@@ -1309,6 +1349,8 @@ function UpdateVisibility()
     end
     UpdateFade()
     UpdateItemButtons() -- in combat the item buttons follow once it ends
+    UpdateTimerTicker()
+    UpdateSortTicker()
 end
 
 -- Bindings.xml and /bqt toggle; the names are what Key Bindings > AddOns lists.
@@ -1530,6 +1572,7 @@ end
 function EVENTS.QUEST_REMOVED(event, questID)
     char.collapsedQuests[questID] = nil
     char.autoUntracked[questID] = nil
+    noTimer[questID] = nil
     RequestRender(event)
 end
 
@@ -1593,10 +1636,11 @@ function EVENTS.QUEST_WATCH_LIST_CHANGED(event, questID, added)
 end
 
 function EVENTS.QUEST_ACCEPTED(event, arg1, arg2)
+    -- Older clients pass (logIndex, questID), Retail passes (questID).
+    local questID = arg2 or arg1
+    noTimer[questID] = nil
     if db.skipHighLevel then
-        -- Older clients pass (logIndex, questID), Retail passes (questID).
         -- Blizzard auto-watches after this event, so untrack slightly later.
-        local questID = arg2 or arg1
         C_Timer.After(0.5, function() UntrackIfTooHigh(questID) end)
     end
     RequestRender(event)
@@ -1614,7 +1658,10 @@ local function OnBagChanged(event)
     if recipesTracked > 0 then RequestRender(event) end
 end
 EVENTS.BAG_UPDATE_DELAYED = OnBagChanged
-EVENTS.GET_ITEM_INFO_RECEIVED = OnBagChanged
+-- Item info arrives for whatever any addon asked about; only a reagent drawn as "..." matters.
+function EVENTS.GET_ITEM_INFO_RECEIVED(event, itemID)
+    if awaitedReagents[itemID] then RequestRender(event) end
+end
 
 EVENTS.QUEST_LOG_UPDATE = RequestRender
 EVENTS.SUPER_TRACKING_CHANGED = RequestRender
@@ -1634,8 +1681,6 @@ local function Init()
     for event in pairs(EVENTS) do frame:RegisterEvent(event) end
     frame:SetScript("OnEvent", function(_, event, ...) EVENTS[event](event, ...) end)
     RegisterSettings()
-    -- Distance changes as you walk; only redraw when the nearest-first order breaks.
-    C_Timer.NewTicker(2, OnSortTick)
     ApplyLayout()
     UpdateVisibility()
 end
