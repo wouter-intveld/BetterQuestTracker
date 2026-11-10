@@ -25,6 +25,9 @@ restart the game. A `/reload` does not pick up changes to the `.toc` file.
   addon checks those quests again. While the option is on, the skull icon in
   the header shows or hides those quests in the tracker; it turns grey while
   they show.
+- Optionally shows the tracker only on mouseover. A keybind (in the settings
+  or Key Bindings > AddOns) or `/bqt toggle` shows and hides it, and it can
+  collapse by itself inside dungeons, raids and battlegrounds.
 - Optionally accepts quests as soon as the quest giver offers them, and turns
   in finished ones, always or only while you hold Shift, Alt or Ctrl. Turn-in
   stops when you have to pick a reward. Both are off by default.

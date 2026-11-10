@@ -25,6 +25,8 @@
     "GetQuestIndexForTimer",
     "GetQuestLogTimeLeft",
     "SelectQuestLogEntry",
-    "GetQuestLogSelection"
+    "GetQuestLogSelection",
+    "CreateKeybindingEntryInitializer",
+    "SettingsPanel"
   ]
 }

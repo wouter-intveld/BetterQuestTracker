@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="BETTERQUESTTRACKER_TOGGLE" header="BETTERQUESTTRACKER" category="ADDONS">
+		BetterQuestTracker_Toggle()
+	</Binding>
+</Bindings>

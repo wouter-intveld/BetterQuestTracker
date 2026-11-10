@@ -20,6 +20,9 @@ local DEFAULTS = {
     autoTurnIn = false,    -- complete finished quests at the quest giver (not when a reward must be picked)
     autoAcceptKey = "none", -- auto accept/turn-in need this key held: "none", "shift", "alt", "ctrl"
     collapsed = false,
+    visibility = "always", -- "always", or "mouseover": invisible until hovered
+    hidden = false,        -- hidden with the keybind or /bqt toggle
+    collapseInInstances = false, -- collapse on entering an instance, expand on leaving
     collapsedZones = {},
 }
 
@@ -35,6 +38,7 @@ local renderCount = 0
 local slowestRender, slowestReason, lastRender = 0, "none", 0
 local titleLines = {}
 local UpdateItemButtons, Render, Refresh -- defined below, called from frame scripts set up above them
+local UpdateVisibility, UpdateInstanceCollapse -- defined below, used by the settings panel
 local HEADER_HEIGHT = 32
 local FOOTER_HEIGHT = 14
 local SCROLL_STEP = 40
@@ -255,6 +259,7 @@ end
 
 SetupControl(collapseButton, function()
     db.collapsed = not db.collapsed
+    char.instanceCollapsed = nil -- the player's choice now, not ours to undo
     Render()
 end, function()
     GameTooltip:AddLine(db.collapsed and TEXT.expand or TEXT.collapse)
@@ -762,6 +767,7 @@ local function GetItemButton(i)
         GameTooltip:Show()
     end)
     b:SetScript("OnLeave", GameTooltip_Hide)
+    b:SetAlpha(frame:GetAlpha()) -- fades with the tracker
     b:Hide()
     itemButtons[i] = b
     return b
@@ -1267,6 +1273,66 @@ local function UntrackHighLevelInLog()
 end
 
 ---------------------------------------------------------------------------
+-- Visibility: a keybind shows or hides the tracker, and "on mouseover" keeps
+-- it invisible until the cursor is over it.
+---------------------------------------------------------------------------
+-- The cursor is polled rather than caught with OnEnter: catching it means
+-- taking the mouse, and an invisible tracker would then block clicks on the
+-- world. 10 checks a second, only while that mode is on and the tracker shown.
+local fadeTicker
+
+local function MouseOverTracker()
+    if frame:IsMouseOver() or collapseButton:IsMouseOver() then return true end
+    for _, b in ipairs(itemButtons) do
+        if b:IsShown() and b:IsMouseOver() then return true end
+    end
+    return false
+end
+
+-- Alpha, not Hide: the item buttons are secure, and alpha may change in combat.
+-- Unlocked, the tracker stays visible so it can be moved.
+local function UpdateFade()
+    local alpha = (db.visibility ~= "mouseover" or not db.locked or MouseOverTracker()) and 1 or 0
+    if frame:GetAlpha() == alpha then return end
+    frame:SetAlpha(alpha)
+    for _, b in ipairs(itemButtons) do b:SetAlpha(alpha) end
+end
+
+function UpdateVisibility()
+    frame:SetShown(not db.hidden)
+    local wanted = db.visibility == "mouseover" and not db.hidden
+    if wanted and not fadeTicker then
+        fadeTicker = C_Timer.NewTicker(0.1, UpdateFade)
+    elseif not wanted and fadeTicker then
+        fadeTicker:Cancel()
+        fadeTicker = nil
+    end
+    UpdateFade()
+    UpdateItemButtons() -- in combat the item buttons follow once it ends
+end
+
+-- Bindings.xml and /bqt toggle; the names are what Key Bindings > AddOns lists.
+BINDING_HEADER_BETTERQUESTTRACKER = BRAND
+BINDING_NAME_BETTERQUESTTRACKER_TOGGLE = "Show or hide the tracker"
+function BetterQuestTracker_Toggle()
+    db.hidden = not db.hidden
+    UpdateVisibility()
+end
+
+-- Collapse on the way into an instance, and expand on the way out unless the
+-- player collapsed or expanded it by hand meanwhile.
+function UpdateInstanceCollapse()
+    local inInstance = IsInInstance()
+    if db.collapseInInstances and inInstance and not db.collapsed then
+        db.collapsed = true
+        char.instanceCollapsed = true
+    elseif not inInstance and char.instanceCollapsed then
+        char.instanceCollapsed = nil
+        db.collapsed = false
+    end
+end
+
+---------------------------------------------------------------------------
 -- Settings panel (Options > AddOns)
 ---------------------------------------------------------------------------
 local function RegisterSettings()
@@ -1302,6 +1368,26 @@ local function RegisterSettings()
 
     Checkbox("locked", "Lock position", "Unlock to drag the tracker and scale it with the mouse wheel.", Refresh)
     Checkbox("quiet", "Mute chat messages", "Don't print automatic messages, like quests being (un)tracked.", function() end)
+    local visibility = Proxy("visibility", Settings.VarType.String, "Show tracker", function(value)
+        db.visibility = value
+        UpdateVisibility()
+    end)
+    Settings.CreateDropdown(category, visibility, function()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("always", "Always")
+        container:Add("mouseover", "On mouseover")
+        return container:GetData()
+    end, "On mouseover keeps the tracker invisible until the cursor is over it. A keybind under Key Bindings > AddOns, or /bqt toggle, shows and hides it.")
+    -- The same key button as Key Bindings > AddOns, when this client's panel offers it.
+    local bindingIndex = C_KeyBindings and C_KeyBindings.GetBindingIndex
+        and C_KeyBindings.GetBindingIndex("BETTERQUESTTRACKER_TOGGLE")
+    if bindingIndex and CreateKeybindingEntryInitializer then
+        SettingsPanel:GetLayout(category):AddInitializer(CreateKeybindingEntryInitializer(bindingIndex, true))
+    end
+    Checkbox("collapseInInstances", "Collapse in instances", "Collapse the tracker when you enter a dungeon, raid or battleground, and expand it again when you leave.", function()
+        UpdateInstanceCollapse()
+        Render()
+    end)
     Slider("scale", "Scale", "Size of the tracker.", SetScaleKeepingPosition, "%.2f")
     Slider("width", "Width", "Width of the tracker in pixels.", function(value) db.width = value end, "%d")
     Slider("maxHeight", "Maximum height", "Taller lists scroll with the mouse wheel.",
@@ -1376,6 +1462,9 @@ SlashCmdList.BETTERQUESTTRACKER = function(msg)
     elseif cmd == "sort" then
         db.sortByDistance = not db.sortByDistance
         Print("sort by distance " .. (db.sortByDistance and "on" or "off"))
+    elseif cmd == "toggle" then
+        BetterQuestTracker_Toggle()
+        return
     elseif cmd == "perf" then
         PrintPerf()
         return
@@ -1395,6 +1484,7 @@ SlashCmdList.BETTERQUESTTRACKER = function(msg)
         print(("  /bqt scale <%s-%s>"):format(LIMITS.scale.min, LIMITS.scale.max))
         print(("  /bqt width <%s-%s>"):format(LIMITS.width.min, LIMITS.width.max))
         print(("  /bqt height <%s-%s> - max height before scrolling"):format(LIMITS.maxHeight.min, LIMITS.maxHeight.max))
+        print("  /bqt toggle - show or hide the tracker")
         print("  /bqt zone - toggle zone filter")
         print("  /bqt sort - toggle sort by distance")
         print("  /bqt watch - toggle following quest log checkboxes")
@@ -1415,6 +1505,7 @@ end
 local EVENTS = {}
 
 function EVENTS.PLAYER_ENTERING_WORLD(event)
+    UpdateInstanceCollapse()
     ApplyLayout()
     UpdateBlizzardTracker()
     HookDurabilityFrame()
@@ -1546,7 +1637,7 @@ local function Init()
     -- Distance changes as you walk; only redraw when the nearest-first order breaks.
     C_Timer.NewTicker(2, OnSortTick)
     ApplyLayout()
-    frame:Show()
+    UpdateVisibility()
 end
 
 frame:RegisterEvent("ADDON_LOADED")
