@@ -167,6 +167,11 @@ local scroll = CreateFrame("ScrollFrame", nil, frame)
 scroll:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT)
 scroll:SetPoint("RIGHT")
 
+-- The picked background sits behind the quest list only, not the header, so a
+-- collapsed tracker stays a bare title (the list hides, and this with it).
+local listBg = scroll:CreateTexture(nil, "BACKGROUND")
+listBg:SetAllPoints()
+
 local content = CreateFrame("Frame", nil, scroll)
 content:SetSize(DEFAULTS.width, 1)
 scroll:SetScrollChild(content)
@@ -549,8 +554,10 @@ end
 
 -- The locked tracker's background; unlocked, the move colours below take over.
 local function ApplyBackground()
+    listBg:SetColorTexture(db.bgR, db.bgG, db.bgB, db.bgA)
+    listBg:SetShown(db.locked)
     if db.locked then
-        frame:SetBackdropColor(db.bgR, db.bgG, db.bgB, db.bgA)
+        frame:SetBackdropColor(0, 0, 0, 0)
         frame:SetBackdropBorderColor(0, 0, 0, 0)
     end
 end
