@@ -23,6 +23,7 @@ local DEFAULTS = {
     visibility = "always", -- "always", or "mouseover": invisible until hovered
     hidden = false,        -- hidden with the keybind or /bqt toggle
     collapseInInstances = false, -- collapse on entering an instance, expand on leaving
+    bgR = 0, bgG = 0, bgB = 0, bgA = 0, -- background behind the text; invisible until picked
     collapsedZones = {},
 }
 
@@ -546,6 +547,14 @@ local function SetScaleKeepingPosition(scale)
     db.scale = scale
 end
 
+-- The locked tracker's background; unlocked, the move colours below take over.
+local function ApplyBackground()
+    if db.locked then
+        frame:SetBackdropColor(db.bgR, db.bgG, db.bgB, db.bgA)
+        frame:SetBackdropBorderColor(0, 0, 0, 0)
+    end
+end
+
 local function ApplyLayout()
     frame:SetScale(db.scale)
     frame:SetWidth(db.width)
@@ -563,8 +572,7 @@ local function ApplyLayout()
     header:SetAlpha(db.locked and 1 or 0.25)
     moveOverlay.text:SetText(TEXT.overlay:format(db.scale * 100 + 0.5))
     if db.locked then
-        frame:SetBackdropColor(0, 0, 0, 0)
-        frame:SetBackdropBorderColor(0, 0, 0, 0)
+        ApplyBackground()
     else
         frame:SetBackdropColor(0, 0.3, 0.6, 0.35)
         frame:SetBackdropBorderColor(0.2, 0.6, 1, 0.9)
@@ -1375,6 +1383,39 @@ function UpdateInstanceCollapse()
 end
 
 ---------------------------------------------------------------------------
+-- Background colour: the game's colour picker, with opacity, as chat windows use.
+---------------------------------------------------------------------------
+local function OpenBackgroundPicker()
+    local old = { db.bgR, db.bgG, db.bgB, db.bgA }
+    local function Changed()
+        db.bgR, db.bgG, db.bgB = ColorPickerFrame:GetColorRGB()
+        if ColorPickerFrame.GetColorAlpha then
+            db.bgA = ColorPickerFrame:GetColorAlpha()
+        else -- older picker: its slider is transparency
+            db.bgA = 1 - OpacitySliderFrame:GetValue()
+        end
+        ApplyBackground()
+    end
+    local function Cancelled()
+        db.bgR, db.bgG, db.bgB, db.bgA = old[1], old[2], old[3], old[4]
+        ApplyBackground()
+    end
+    if ColorPickerFrame.SetupColorPickerAndShow then
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = db.bgR, g = db.bgG, b = db.bgB, opacity = db.bgA, hasOpacity = true,
+            swatchFunc = Changed, opacityFunc = Changed, cancelFunc = Cancelled,
+        })
+    else
+        ColorPickerFrame:Hide()
+        ColorPickerFrame.hasOpacity, ColorPickerFrame.opacity = true, 1 - db.bgA
+        ColorPickerFrame.func, ColorPickerFrame.opacityFunc = Changed, Changed
+        ColorPickerFrame.cancelFunc = Cancelled
+        ColorPickerFrame:SetColorRGB(db.bgR, db.bgG, db.bgB)
+        ShowUIPanel(ColorPickerFrame)
+    end
+end
+
+---------------------------------------------------------------------------
 -- Settings panel (Options > AddOns)
 ---------------------------------------------------------------------------
 local function RegisterSettings()
@@ -1434,6 +1475,10 @@ local function RegisterSettings()
     Slider("width", "Width", "Width of the tracker in pixels.", function(value) db.width = value end, "%d")
     Slider("maxHeight", "Maximum height", "Taller lists scroll with the mouse wheel.",
         function(value) db.maxHeight = value end, "%d")
+    if CreateSettingsButtonInitializer then
+        SettingsPanel:GetLayout(category):AddInitializer(CreateSettingsButtonInitializer("Background", "Pick colour",
+            OpenBackgroundPicker, "Colour and opacity behind the text, to keep it readable. /bqt bg reset clears it.", true))
+    end
 
     category = Settings.RegisterVerticalLayoutSubcategory(main, "Quests")
     Checkbox("zoneFilter", "Only quests in current zone", "Hide quests that are not in your current zone.", RequestRender)
@@ -1507,6 +1552,15 @@ SlashCmdList.BETTERQUESTTRACKER = function(msg)
     elseif cmd == "toggle" then
         BetterQuestTracker_Toggle()
         return
+    elseif cmd == "bg" then
+        if arg == "reset" then
+            db.bgR, db.bgG, db.bgB, db.bgA = DEFAULTS.bgR, DEFAULTS.bgG, DEFAULTS.bgB, DEFAULTS.bgA
+            ApplyBackground()
+            Print("background cleared")
+        else
+            OpenBackgroundPicker()
+        end
+        return
     elseif cmd == "perf" then
         PrintPerf()
         return
@@ -1527,6 +1581,7 @@ SlashCmdList.BETTERQUESTTRACKER = function(msg)
         print(("  /bqt width <%s-%s>"):format(LIMITS.width.min, LIMITS.width.max))
         print(("  /bqt height <%s-%s> - max height before scrolling"):format(LIMITS.maxHeight.min, LIMITS.maxHeight.max))
         print("  /bqt toggle - show or hide the tracker")
+        print("  /bqt bg - pick a background colour and opacity (bg reset clears it)")
         print("  /bqt zone - toggle zone filter")
         print("  /bqt sort - toggle sort by distance")
         print("  /bqt watch - toggle following quest log checkboxes")

@@ -27,6 +27,9 @@
     "SelectQuestLogEntry",
     "GetQuestLogSelection",
     "CreateKeybindingEntryInitializer",
-    "SettingsPanel"
+    "SettingsPanel",
+    "ColorPickerFrame",
+    "OpacitySliderFrame",
+    "CreateSettingsButtonInitializer"
   ]
 }
