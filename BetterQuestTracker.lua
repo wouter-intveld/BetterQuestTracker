@@ -198,8 +198,9 @@ moreText:SetText(TEXT.scrollMore)
 ---------------------------------------------------------------------------
 -- Header controls
 -- Small atlas icons in their own colours, dimmed until hovered. Right to left
--- in the header: zone filter, +N (high-level quests), lock. The collapse
--- toggle sits just outside the tracker, on its top-right corner.
+-- in the header: collapse, zone filter, +N (high-level quests), lock. The
+-- collapse toggle stays inside the tracker, clear of the durability figure
+-- that Blizzard places above it.
 ---------------------------------------------------------------------------
 local ICON_SIZE, ICON_GAP, ICON_DIM = 14, 6, 0.6
 
@@ -214,10 +215,10 @@ local function IconButton(parent, atlas)
 end
 
 local collapseButton = IconButton(frame) -- atlas follows db.collapsed, see UpdateHeader
-collapseButton:SetPoint("BOTTOMLEFT", frame, "TOPRIGHT")
+collapseButton:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, -1)
 
 local modeButton = IconButton(header, "Map-Filter-Button")
-modeButton:SetPoint("BOTTOMRIGHT", 0, -1)
+modeButton:SetPoint("BOTTOMRIGHT", collapseButton, "BOTTOMLEFT", -ICON_GAP, 0)
 
 local levelButton = IconButton(header, "UI-HUD-UnitFrame-Target-HighLevelTarget_Icon")
 levelButton:SetPoint("BOTTOMRIGHT", modeButton, "BOTTOMLEFT", -ICON_GAP, 0)
