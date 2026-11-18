@@ -216,6 +216,8 @@ end
 
 local collapseButton = IconButton(frame) -- atlas follows db.collapsed, see UpdateHeader
 collapseButton:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, -1)
+-- A sibling of the header at the same level could draw under it: lift it above.
+collapseButton:SetFrameLevel(header:GetFrameLevel() + 5)
 
 local modeButton = IconButton(header, "Map-Filter-Button")
 modeButton:SetPoint("BOTTOMRIGHT", collapseButton, "BOTTOMLEFT", -ICON_GAP, 0)
